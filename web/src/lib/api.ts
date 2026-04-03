@@ -131,3 +131,56 @@ export async function verifySiwe(
     body: JSON.stringify({ message, signature }),
   });
 }
+
+// --- Payment API ---
+
+export interface PaymentData {
+  id: string;
+  trip_id: number;
+  amount: string;
+  category: string;
+  description: string;
+  recipient: string;
+  status: string;
+  created_at: string;
+  tx_hash?: string;
+}
+
+export async function createPaymentRequest(
+  tripId: string,
+  data: {
+    amount: string;
+    category: string;
+    description: string;
+    recipient: string;
+  },
+  token?: string
+): Promise<PaymentData> {
+  return apiFetch(
+    `/v1/trips/${tripId}/payments`,
+    {
+      method: "POST",
+      body: JSON.stringify(data),
+    },
+    { token }
+  );
+}
+
+export async function getPayments(
+  tripId: string,
+  token?: string
+): Promise<PaymentData[]> {
+  return apiFetch(`/v1/trips/${tripId}/payments`, { method: "GET" }, { token });
+}
+
+export async function approvePayment(
+  tripId: string,
+  paymentId: string,
+  token?: string
+): Promise<{ status: string }> {
+  return apiFetch(
+    `/v1/trips/${tripId}/payments/${paymentId}/approve`,
+    { method: "POST" },
+    { token }
+  );
+}
