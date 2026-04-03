@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React, { type ReactNode } from "react";
 import { cookieToInitialState, WagmiProvider, type Config } from "wagmi";
 import { wagmiAdapter, projectId, chains } from "./wagmi";
+import { AuthProvider } from "@/context/AuthContext";
 
 // Create query client
 const queryClient = new QueryClient();
@@ -47,7 +48,9 @@ export default function AppKitProvider({
       config={wagmiAdapter.wagmiConfig as Config}
       initialState={initialState}
     >
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>{children}</AuthProvider>
+      </QueryClientProvider>
     </WagmiProvider>
   );
 }

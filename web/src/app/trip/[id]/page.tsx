@@ -2,6 +2,7 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useAccount } from "wagmi";
+import { useAuth } from "@/context/AuthContext";
 import ConnectButton from "@/components/ConnectButton";
 import TreasuryDashboard from "@/components/TreasuryDashboard";
 import SpendingFeed from "@/components/SpendingFeed";
@@ -11,6 +12,7 @@ export default function TripPage() {
   const params = useParams();
   const router = useRouter();
   const { isConnected } = useAccount();
+  const { token } = useAuth();
 
   const tripId = BigInt(params.id as string);
   const tripIdStr = params.id as string;
@@ -128,7 +130,7 @@ export default function TripPage() {
               </svg>
               Co-Pilot
             </h2>
-            <VoiceInterface tripId={tripIdStr} />
+            <VoiceInterface tripId={tripIdStr} token={token ?? undefined} />
           </div>
         </div>
       </div>

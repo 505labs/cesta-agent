@@ -115,3 +115,19 @@ export async function voiceConverse(
 
   return res.blob();
 }
+
+// --- Auth API ---
+
+export async function getNonce(): Promise<{ nonce: string }> {
+  return apiFetch("/v1/auth/nonce", { method: "GET" });
+}
+
+export async function verifySiwe(
+  message: string,
+  signature: string
+): Promise<{ token: string; wallet_address: string }> {
+  return apiFetch("/v1/auth/verify", {
+    method: "POST",
+    body: JSON.stringify({ message, signature }),
+  });
+}
