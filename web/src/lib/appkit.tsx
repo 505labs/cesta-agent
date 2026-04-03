@@ -4,11 +4,22 @@ import { createAppKit } from "@reown/appkit/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React, { type ReactNode } from "react";
 import { cookieToInitialState, WagmiProvider, type Config } from "wagmi";
-import { wagmiAdapter, projectId, chains } from "./wagmi";
+import { wagmiAdapter, projectId, evmChains } from "./wagmi";
+import { SolanaAdapter } from "@reown/appkit-adapter-solana/react";
+import { solana, solanaDevnet } from "@reown/appkit/networks";
+import {
+  PhantomWalletAdapter,
+  SolflareWalletAdapter,
+} from "@solana/wallet-adapter-wallets";
 import { AuthProvider } from "@/context/AuthContext";
 
 // Create query client
 const queryClient = new QueryClient();
+
+// Solana adapter
+const solanaWeb3JsAdapter = new SolanaAdapter({
+  wallets: [new PhantomWalletAdapter(), new SolflareWalletAdapter()],
+});
 
 // App metadata for WalletConnect modal
 const metadata = {
@@ -18,16 +29,20 @@ const metadata = {
   icons: ["/icon.svg"],
 };
 
-// Initialize Reown AppKit
+// All networks: EVM chains + Solana chains
+const allNetworks = [...evmChains, solana, solanaDevnet] as const;
+
+// Initialize Reown AppKit with both EVM + Solana adapters
 createAppKit({
-  adapters: [wagmiAdapter],
+  adapters: [wagmiAdapter, solanaWeb3JsAdapter],
   projectId,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  networks: chains as any,
-  defaultNetwork: chains[0],
+  networks: allNetworks as any,
+  defaultNetwork: evmChains[0],
   metadata,
   features: {
     analytics: false,
+    swaps: true,
+    onramp: true,
   },
 });
 

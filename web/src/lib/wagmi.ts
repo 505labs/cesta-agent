@@ -1,5 +1,6 @@
 import { cookieStorage, createStorage, http } from "wagmi";
 import { defineChain } from "viem";
+import { sepolia, baseSepolia } from "viem/chains";
 import { WagmiAdapter } from "@reown/appkit-adapter-wagmi";
 
 // Local Anvil chain for development
@@ -31,18 +32,20 @@ if (!projectId) {
   );
 }
 
-// Supported chains
-export const chains = [anvilLocal] as const;
+// Supported EVM chains
+export const evmChains = [anvilLocal, sepolia, baseSepolia] as const;
 
-// Wagmi adapter for Reown AppKit
+// Wagmi adapter for Reown AppKit (EVM only — Solana uses its own adapter)
 export const wagmiAdapter = new WagmiAdapter({
   storage: createStorage({ storage: cookieStorage }),
   ssr: true,
   projectId,
-  networks: chains,
+  networks: evmChains,
   transports: {
     [anvilLocal.id]: http(
       process.env.NEXT_PUBLIC_CHAIN_RPC_URL || "http://127.0.0.1:8545"
     ),
+    [sepolia.id]: http(),
+    [baseSepolia.id]: http(),
   },
 });
