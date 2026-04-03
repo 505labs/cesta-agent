@@ -363,49 +363,123 @@ This is especially important for the demo: judges shouldn't have to think about 
 
 ---
 
+## How Arc and WalletConnect Coexist (Not Compete)
+
+A common concern: both Arc/Circle and WalletConnect seem to "handle payments." Research and an independent Codex review confirm they are **complementary layers, not competing products** — but only if the architecture cleanly separates their roles.
+
+### The Core Distinction
+
+- **WalletConnect/Reown** = connectivity and UX layer. How **humans** connect wallets, approve transactions, and pay at merchant checkouts. It is a messaging/orchestration protocol — it does NOT settle payments itself.
+- **Arc/Circle** = settlement and protocol layer. Where transactions actually finalize. The treasury contract, nanopayments batching, cross-chain bridging, and agent key management all live here.
+
+### x402/Nanopayments vs WalletConnect Pay — NOT the Same Thing
+
+| | WalletConnect Pay | x402 / Circle Nanopayments |
+|---|---|---|
+| **Who pays** | Human (wallet approval) | AI agent (automatic, no human) |
+| **Who receives** | Merchants (gas station, restaurant) | API services (weather, gas prices, routes) |
+| **Payment size** | $10 - $500+ | $0.001 - $0.01 |
+| **Settlement** | Individual on-chain tx | Batched off-chain, periodic on-chain |
+| **Gas cost** | Borne by user/agent per tx | Zero (Circle absorbs) |
+| **Interaction** | QR scan, wallet popup, tap | HTTP header, no UI |
+| **Chains supported** | Ethereum, Base, Optimism, Polygon, Arbitrum | Arc, Base, Ethereum, + 10 more |
+
+They are redundant ONLY if you use both for the same payment type. We don't.
+
+### Clean Layer Separation (Resolved Architecture)
+
+| Layer | Technology | Role | Example |
+|-------|-----------|------|---------|
+| **User connectivity** | Reown AppKit | Wallet connect, auth (SIWE), deposits, approvals | "Connect Wallet" button, trip join flow |
+| **Merchant payments** | WalletConnect Pay | Human-initiated payments at real-world merchants | Paying $45 for gas at a station via QR/tap |
+| **Agent custody** | Circle Programmable Wallets | MPC-secured signer for the AI agent (no raw keys) | Agent signs treasury spend transactions |
+| **Machine payments** | x402 / Circle Nanopayments | Agent-to-service micropayments for data/APIs | Agent pays $0.005 for restaurant ratings data |
+| **Treasury & settlement** | Arc + GroupTreasury.sol | On-chain source of truth for group funds | Budget tracking, spending rules, receipts |
+| **Cross-chain** | CCTP V2 + Gateway | Bridge USDC from any chain to Arc treasury | Friend deposits from Base, arrives on Arc |
+| **FX conversion** | StableFX | USDC ↔ EURC atomic on-chain conversion | Paying €35 for lunch in Italy from USD pool |
+
+### The Agent Authority Model (Contradiction Resolved)
+
+The existing docs had three conflicting proposals for how the agent signs transactions:
+1. Fixed authorized agent wallet (original design spec)
+2. Per-user Smart Sessions / ERC-7715 (WalletConnect integration doc)
+3. Circle Programmable Wallets / MPC (Arc integration doc)
+
+**Resolution: Circle Programmable Wallets is the canonical agent signer.** Reasons:
+- MPC key security — no single point of failure, no raw key in Claude session
+- API-driven — agent calls Circle's API to sign, key never exists in memory
+- Arc-native — first-party integration, supports "ARC-TESTNET" as blockchain param
+- Aligns with Arc's Track 3 (agentic economy) narrative
+
+WalletConnect's role remains deep through:
+- AppKit for all user-facing wallet connection and auth
+- WalletConnect Pay for merchant checkout (human-approved payments)
+- Smart Sessions as an optional bonus — users grant the agent scoped permissions via ERC-7715, which the agent exercises through its Circle wallet
+- Agent SDK for cross-chain bridging when WC Pay settles on non-Arc chains
+
+### Important Caveat: WalletConnect Pay Chain Support
+
+WalletConnect Pay currently supports USDC on **Ethereum, Base, Optimism, Polygon, Arbitrum** — **not Arc directly**. This means:
+
+- Merchant payments via WC Pay settle on one of those chains (likely Base for speed/cost)
+- The treasury lives on Arc
+- CCTP V2 bridges the settlement back to Arc if needed
+- This actually **reinforces the separation**: WC Pay handles merchant UX on chains it supports, Arc handles the treasury and agent economy
+
+For the demo, this is fine — the merchant payment flow works on Base, the treasury and nanopayments work on Arc, and CCTP bridges between them transparently.
+
+---
+
 ## Architecture: How Arc Technologies Layer Together
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                     WEB FRONTEND                         │
-│  Reown AppKit (wallet auth) + Trip Dashboard + Voice UI  │
-└───────────────────┬─────────────────────────────────────┘
-                    │
-        ┌───────────▼───────────┐
-        │     ORCHESTRATOR      │
-        │  FastAPI + SIWE Auth  │
-        └───────────┬───────────┘
-                    │
-        ┌───────────▼───────────┐
-        │   CLAUDE CODE SESSION │
-        │   (Voice AI Agent)    │
-        │                       │
-        │  MCP Servers:         │
-        │  ├── google-maps      │
-        │  ├── trip-treasury ───┼──► GroupTreasury.sol (Arc)
-        │  │   (Circle Wallets  │    ├── ERC-8183 escrow base
-        │  │    API for signing)│    ├── Multi-depositor
-        │  ├── trip-memory ─────┼──► 0G Storage
-        │  └── voice-channel    │
-        └───────────┬───────────┘
-                    │
-    ┌───────────────┼───────────────────┐
-    │               │                   │
-    ▼               ▼                   ▼
-┌────────┐  ┌──────────────┐  ┌──────────────────┐
-│ x402   │  │ CCTP V2 +    │  │  StableFX        │
-│ Nano-  │  │ Gateway      │  │  (USDC ↔ EURC)   │
-│payments│  │ (cross-chain │  │  FX conversion    │
-│        │  │  deposits)   │  │  for cross-border │
-│ Agent  │  │              │  │  payments         │
-│ pays   │  │ Hooks auto-  │  └──────────────────┘
-│ for    │  │ deposit into │
-│ APIs   │  │ treasury     │
-└────────┘  └──────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                     HUMAN LAYER (WalletConnect)               │
+│                                                               │
+│  Reown AppKit: wallet connect, SIWE auth, multi-chain modal  │
+│  WalletConnect Pay: merchant checkout (QR/tap) on Base/ETH   │
+│  Smart Sessions (ERC-7715): scoped agent permissions          │
+│  In-app swaps + onramp: fiat → USDC funding flow             │
+└──────────────────────────┬───────────────────────────────────┘
+                           │
+               ┌───────────▼───────────┐
+               │     ORCHESTRATOR      │
+               │  FastAPI + SIWE Auth  │
+               └───────────┬───────────┘
+                           │
+               ┌───────────▼───────────┐
+               │   CLAUDE CODE SESSION │
+               │   (Voice AI Agent)    │
+               │                       │
+               │  MCP Servers:         │
+               │  ├── google-maps      │
+               │  ├── trip-treasury ───┼──► GroupTreasury.sol (Arc)
+               │  │   (Circle Wallets  │    ├── ERC-8183 escrow base
+               │  │    MPC for signing)│    ├── Multi-depositor
+               │  ├── trip-memory ─────┼──► 0G Storage
+               │  └── voice-channel    │
+               └───────────┬───────────┘
+                           │
+       ┌───────────────────┼────────────────────┐
+       │                   │                    │
+       ▼                   ▼                    ▼
+┌─────────────┐  ┌──────────────┐  ┌──────────────────┐
+│ MACHINE     │  │ CROSS-CHAIN  │  │  MULTI-CURRENCY  │
+│ PAYMENTS    │  │              │  │                  │
+│ (Arc/Circle)│  │ CCTP V2 +   │  │  StableFX        │
+│             │  │ Gateway      │  │  (USDC ↔ EURC)   │
+│ x402 nano-  │  │              │  │  Atomic PvP FX   │
+│ payments    │  │ Hooks auto-  │  │  for cross-border│
+│ for APIs    │  │ deposit into │  │  merchant pays   │
+│ ($0.001/call│  │ treasury     │  │                  │
+│ gas-free)   │  │              │  │                  │
+└─────────────┘  └──────────────┘  └──────────────────┘
 
-Agent Identity: ERC-8004 (IdentityRegistry + ReputationRegistry)
-Agent Wallet: Circle Programmable Wallets (MPC, no raw keys)
-Gas: Circle Paymaster sponsors user gas for deposits
+Agent Identity: ERC-8004 (IdentityRegistry + ReputationRegistry) — Arc-native
+Agent Wallet: Circle Programmable Wallets (MPC, no raw keys) — canonical signer
+Merchant Payments: WalletConnect Pay (settles on Base/ETH, bridges to Arc via CCTP)
+Machine Payments: x402/Nanopayments (settles on Arc via Gateway batching)
+Gas Sponsorship: Circle Paymaster (users pay zero gas for deposits)
 ```
 
 ---
