@@ -9,9 +9,11 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@lit/reactive-element": "^2.0.4",
     "@reown/appkit": "^1.6.8",
     "@reown/appkit-adapter-wagmi": "^1.6.8",
     "@tanstack/react-query": "^5.62.0",
+    "lit": "^3.3.2",
     "next": "15.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -24,8 +26,10 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "es-abstract": "^1.23.9",
     "eslint": "^9",
     "eslint-config-next": "15.1.0",
+    "flatted": "^3.3.1",
     "postcss": "^8",
     "tailwindcss": "^4",
     "typescript": "^5"

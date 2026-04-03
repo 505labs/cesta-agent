@@ -2,7 +2,8 @@
 
 import { useReadContract, useWriteContract, useAccount } from "wagmi";
 import { parseUnits, type Address } from "viem";
-import GroupTreasuryABI from "@/abi/GroupTreasury.json";
+import GroupTreasuryJSON from "@/abi/GroupTreasury.json";
+const GroupTreasuryABI = GroupTreasuryJSON.abi;
 
 // Contract addresses from env
 const TREASURY_ADDRESS = (process.env.NEXT_PUBLIC_TREASURY_ADDRESS ||

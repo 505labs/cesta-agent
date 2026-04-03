@@ -21,7 +21,8 @@ const metadata = {
 createAppKit({
   adapters: [wagmiAdapter],
   projectId,
-  networks: chains,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  networks: chains as any,
   defaultNetwork: chains[0],
   metadata,
   features: {
