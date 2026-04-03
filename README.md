@@ -9,40 +9,70 @@ Built for [ETHGlobal Cannes 2026](https://ethglobal.com/events/cannes2026).
 ## Architecture
 
 ```
-Web App (voice + dashboard)
-        |
-  [orchestrator :8080]  <-- FastAPI, SIWE wallet auth, trip mgmt
-     |         |
-[Voice VM]  [voice-channel :9000]  <-- MCP bridge to Claude Code
- STT/TTS         |
-            [Claude Code session]
-              with MCP servers:
-              +-- google-maps (places, directions)
-              +-- treasury (smart contract)
-              +-- trip-memory (0G storage)
-              +-- weather
-                      |
-               [GroupTreasury.sol on Arc]
+ +------------------+        +------------------+
+ |    Web App       |        | Android Auto App |
+ |   (Next.js)      |        |    (Kotlin)      |
+ |  WalletConnect   |        |   Voice I/O      |
+ +--------+---------+        +--------+---------+
+          |                           |
+          +----------+   +------------+
+                     |   |
+               +-----v---v------+         +------------------+
+               |  Orchestrator  |-------->|   Voice VM (GPU) |
+               |  (FastAPI)     |         |   Whisper STT    |
+               |  :8080         |<--------|   Kokoro TTS     |
+               +-------+--------+         +------------------+
+                       |
+              +--------v---------+
+              |  voice-channel   |
+              |  (MCP :9000)     |
+              +--------+---------+
+                       |
+              +--------v---------+
+              |  Claude Code     |         +------------------+
+              |  Session (tmux)  |-------->| GroupTreasury.sol|
+              |                  |         | (Arc / Anvil)    |
+              |  MCP Servers:    |         +------------------+
+              |  - google-maps   |
+              |  - treasury -----+---------+
+              |  - trip-memory   |
+              |  - weather       |
+              +------------------+
 ```
+
+Both the **web app** and the **Android Auto app** talk to the same orchestrator and share the same AI agent. The only difference is the client UI.
+
+See **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** for detailed architecture diagrams, data flows, component descriptions, and testing guide.
 
 ## Components
 
-| Directory | What | Tech |
-|-----------|------|------|
-| `contracts/` | GroupTreasury smart contract | Solidity, Foundry |
-| `mcp-servers/` | Custom MCP servers (treasury, memory) | TypeScript, Bun |
-| `orchestrator/` | Backend API + voice pipeline | Python, FastAPI |
-| `web/` | Frontend dashboard + voice UI | Next.js, Reown AppKit |
-| `agent/` | Claude Code persona + MCP config | CLAUDE.md, .mcp.json |
+| Directory | What | Tech | Tests |
+|-----------|------|------|-------|
+| `contracts/` | GroupTreasury smart contract | Solidity, Foundry | 14/14 pass |
+| `mcp-servers/` | Custom MCP servers (treasury, memory) | TypeScript, Bun | Smoke tested |
+| `orchestrator/` | Backend API + voice pipeline | Python, FastAPI | 15/15 pass |
+| `web/` | Frontend dashboard + voice UI | Next.js, Reown AppKit | Builds OK |
+| `agent/` | Claude Code persona + MCP config | CLAUDE.md, .mcp.json | — |
 
 ## Quick Start
 
-Each component has its own README with setup instructions. The general flow:
+```bash
+# Terminal 1: Local blockchain
+cd contracts && anvil
 
-1. **Deploy contracts:** `cd contracts && forge test && forge script script/Deploy.s.sol`
-2. **Start orchestrator:** `cd orchestrator && pip install -r requirements.txt && uvicorn main:app --port 8080`
-3. **Start frontend:** `cd web && npm install && npm run dev`
-4. **Start agent:** `cd agent && claude --dangerously-load-development-channels server:../voice-channel`
+# Terminal 2: Deploy contract
+cd contracts && forge script script/Deploy.s.sol \
+  --rpc-url http://127.0.0.1:8545 --broadcast
+
+# Terminal 3: Orchestrator
+cd orchestrator && source .venv/bin/activate && uvicorn main:app --port 8080
+
+# Terminal 4: Web frontend
+cd web && npm run dev
+
+# Terminal 5: Agent (optional — needs voice-channel from claude-superapp)
+cd agent && claude --dangerously-load-development-channels server:../voice-channel
+```
 
 ## Sponsor Tracks
 
