@@ -4,11 +4,14 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAccount } from "wagmi";
 import { useCreateTripOnChain } from "@/lib/treasury";
+import { useAuth } from "@/context/AuthContext";
+import { createTrip as createTripApi } from "@/lib/api";
 
 export default function CreateTrip() {
   const router = useRouter();
   const { address } = useAccount();
   const { createTrip, isPending } = useCreateTripOnChain();
+  const { token } = useAuth();
 
   const [name, setName] = useState("");
   const [spendLimit, setSpendLimit] = useState("50");
@@ -22,11 +25,25 @@ export default function CreateTrip() {
 
     setIsCreating(true);
     try {
-      // Create trip on-chain
+      // 1. Create trip on-chain
       await createTrip(agentAddress as `0x${string}`, spendLimit);
 
-      // Navigate to trip page (using trip ID 0 as placeholder — in production,
-      // you'd parse the TripCreated event log for the actual ID)
+      // 2. Register trip in backend (if authenticated)
+      if (token) {
+        try {
+          await createTripApi(
+            {
+              name: name || "Road Trip",
+              spend_limit: spendLimit,
+            },
+            token
+          );
+        } catch (err) {
+          console.error("Backend trip registration failed:", err);
+          // Continue even if backend fails — on-chain is the source of truth
+        }
+      }
+
       router.push(`/trip/0`);
     } catch (err) {
       console.error("Failed to create trip:", err);
