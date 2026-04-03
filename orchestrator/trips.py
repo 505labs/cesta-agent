@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Header
 from pydantic import BaseModel
 
 from auth import get_wallet_from_request
-from db import create_trip, get_trip, list_trips, add_trip_member, get_trip_members
+from db import create_trip, get_trip, list_trips, add_trip_member, get_trip_members, create_payment, get_payments as db_get_payments, approve_payment as db_approve_payment
 
 router = APIRouter(prefix="/v1/trips", tags=["trips"])
 
@@ -63,3 +63,40 @@ async def join_trip_endpoint(trip_id: int, body: JoinTripRequest, authorization:
         raise HTTPException(status_code=404, detail="Trip not found")
     add_trip_member(trip_id, wallet, body.display_name)
     return {"status": "joined", "trip_id": trip_id}
+
+
+class CreatePaymentRequest(BaseModel):
+    amount: str
+    category: str = ""
+    description: str = ""
+    recipient: str
+
+
+@router.post("/{trip_id}/payments")
+async def create_payment_endpoint(trip_id: int, body: CreatePaymentRequest, authorization: str = Header(None)):
+    wallet = _require_wallet(authorization)
+    trip = get_trip(trip_id)
+    if not trip:
+        raise HTTPException(status_code=404, detail="Trip not found")
+    payment = create_payment(
+        trip_id=trip_id,
+        amount=body.amount,
+        category=body.category,
+        description=body.description,
+        recipient=body.recipient,
+        created_by=wallet,
+    )
+    return payment
+
+
+@router.get("/{trip_id}/payments")
+async def list_payments_endpoint(trip_id: int, authorization: str = Header(None)):
+    _require_wallet(authorization)
+    return db_get_payments(trip_id)
+
+
+@router.post("/{trip_id}/payments/{payment_id}/approve")
+async def approve_payment_endpoint(trip_id: int, payment_id: str, authorization: str = Header(None)):
+    wallet = _require_wallet(authorization)
+    payment = db_approve_payment(payment_id, wallet)
+    return payment

@@ -10,6 +10,7 @@ Tables:
 
 import os
 import sqlite3
+import uuid
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -74,6 +75,26 @@ def init_db():
                 assistant_response TEXT,
                 duration_ms INTEGER,
                 created_at REAL NOT NULL DEFAULT (unixepoch())
+            );
+
+            CREATE TABLE IF NOT EXISTS payments (
+                id TEXT PRIMARY KEY,
+                trip_id INTEGER NOT NULL REFERENCES trips(id),
+                amount TEXT NOT NULL,
+                category TEXT NOT NULL DEFAULT '',
+                description TEXT NOT NULL DEFAULT '',
+                recipient TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                tx_hash TEXT,
+                created_by TEXT NOT NULL,
+                created_at REAL NOT NULL DEFAULT (unixepoch())
+            );
+
+            CREATE TABLE IF NOT EXISTS payment_approvals (
+                payment_id TEXT NOT NULL REFERENCES payments(id),
+                wallet_address TEXT NOT NULL,
+                approved_at REAL NOT NULL DEFAULT (unixepoch()),
+                PRIMARY KEY (payment_id, wallet_address)
             );
         """)
 
@@ -148,3 +169,39 @@ def log_conversation(trip_id: int, wallet_address: str, user_transcript: str,
             "INSERT INTO conversations (trip_id, wallet_address, user_transcript, assistant_response, duration_ms) VALUES (?, ?, ?, ?, ?)",
             (trip_id, wallet_address.lower(), user_transcript, assistant_response, duration_ms),
         )
+
+
+def create_payment(trip_id: int, amount: str, category: str, description: str,
+                   recipient: str, created_by: str) -> dict:
+    payment_id = str(uuid.uuid4())[:8]
+    with get_db() as conn:
+        conn.execute(
+            "INSERT INTO payments (id, trip_id, amount, category, description, recipient, status, created_by) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)",
+            (payment_id, trip_id, amount, category, description, recipient, created_by.lower()),
+        )
+        row = conn.execute("SELECT * FROM payments WHERE id = ?", (payment_id,)).fetchone()
+        return dict(row)
+
+
+def get_payments(trip_id: int) -> list[dict]:
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT * FROM payments WHERE trip_id = ? ORDER BY created_at DESC", (trip_id,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def approve_payment(payment_id: str, wallet_address: str) -> dict:
+    wallet = wallet_address.lower()
+    with get_db() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO payment_approvals (payment_id, wallet_address) VALUES (?, ?)",
+            (payment_id, wallet),
+        )
+        count = conn.execute(
+            "SELECT COUNT(*) FROM payment_approvals WHERE payment_id = ?", (payment_id,)
+        ).fetchone()[0]
+        if count >= 2:
+            conn.execute("UPDATE payments SET status = 'approved' WHERE id = ?", (payment_id,))
+        row = conn.execute("SELECT * FROM payments WHERE id = ?", (payment_id,)).fetchone()
+        return dict(row)
