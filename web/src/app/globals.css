@@ -1,0 +1,67 @@
+@import "tailwindcss";
+
+:root {
+  --bg-primary: #0a0a0f;
+  --bg-secondary: #12121a;
+  --bg-card: #1a1a2e;
+  --bg-card-hover: #1f1f35;
+  --border-color: #2a2a40;
+  --text-primary: #f0f0f5;
+  --text-secondary: #8888a0;
+  --accent-blue: #3b82f6;
+  --accent-green: #22c55e;
+  --accent-amber: #f59e0b;
+  --accent-red: #ef4444;
+  --accent-purple: #8b5cf6;
+}
+
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 3px;
+}
+
+/* Pulse animation for voice recording */
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.8);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+}
+
+.animate-pulse-ring {
+  animation: pulse-ring 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+}
+
+/* Glass morphism card effect */
+.glass-card {
+  background: rgba(26, 26, 46, 0.8);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(42, 42, 64, 0.6);
+  border-radius: 16px;
+}
+
+/* Glow effects */
+.glow-blue {
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+}
+
+.glow-green {
+  box-shadow: 0 0 20px rgba(34, 197, 94, 0.3);
+}
