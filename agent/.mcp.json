@@ -1,0 +1,32 @@
+{
+  "mcpServers": {
+    "google-maps": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-google-maps"],
+      "env": {
+        "GOOGLE_MAPS_API_KEY": "${GOOGLE_MAPS_API_KEY}"
+      }
+    },
+    "weather": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-weather"]
+    },
+    "treasury": {
+      "command": "bun",
+      "args": ["../mcp-servers/treasury/index.ts"],
+      "env": {
+        "RPC_URL": "${RPC_URL}",
+        "TREASURY_ADDRESS": "${TREASURY_ADDRESS}",
+        "AGENT_PRIVATE_KEY": "${AGENT_PRIVATE_KEY}",
+        "CHAIN_ID": "${CHAIN_ID}"
+      }
+    },
+    "trip-memory": {
+      "command": "bun",
+      "args": ["../mcp-servers/trip-memory/index.ts"],
+      "env": {
+        "TRIP_MEMORY_DIR": "${TRIP_MEMORY_DIR}"
+      }
+    }
+  }
+}
