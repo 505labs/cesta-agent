@@ -225,4 +225,79 @@ contract GroupTreasuryTest is Test {
         uint256 aliceGot = usdc.balanceOf(alice) - aliceBefore;
         assertApproxEqAbs(aliceGot, 166_666666, 1); // allow 1 wei rounding
     }
+
+    // --- Multi-spend Tests ---
+
+    function test_spend_multipleInSequence() public {
+        uint256 tripId = _createTrip();
+        _depositAs(alice, tripId, 600e6);
+
+        vm.startPrank(agent);
+        treasury.spend(tripId, restaurant, 40e6, "food", "breakfast");
+        treasury.spend(tripId, restaurant, 60e6, "gas", "fill up");
+        treasury.spend(tripId, restaurant, 30e6, "food", "snacks");
+        vm.stopPrank();
+
+        GroupTreasury.Spend[] memory history = treasury.getSpends(tripId);
+        assertEq(history.length, 3);
+        assertEq(treasury.getBalance(tripId), 470e6);
+    }
+
+    function test_spend_exactlyAtLimit() public {
+        uint256 tripId = _createTrip();
+        _depositAs(alice, tripId, DEPOSIT_AMOUNT);
+
+        vm.prank(agent);
+        treasury.spend(tripId, restaurant, SPEND_LIMIT, "lodging", "hotel exactly at limit");
+
+        assertEq(treasury.getBalance(tripId), DEPOSIT_AMOUNT - SPEND_LIMIT);
+    }
+
+    function test_deposit_revertSettledTrip() public {
+        uint256 tripId = _createTrip();
+        _depositAs(alice, tripId, DEPOSIT_AMOUNT);
+
+        vm.prank(alice);
+        treasury.settle(tripId);
+
+        vm.startPrank(bob);
+        usdc.approve(address(treasury), DEPOSIT_AMOUNT);
+        vm.expectRevert("Trip not active");
+        treasury.deposit(tripId, DEPOSIT_AMOUNT);
+        vm.stopPrank();
+    }
+
+    function test_emergencyWithdraw_revertNonMember() public {
+        uint256 tripId = _createTrip();
+        _depositAs(alice, tripId, DEPOSIT_AMOUNT);
+
+        vm.prank(bob);
+        vm.expectRevert("Not a member");
+        treasury.emergencyWithdraw(tripId);
+    }
+
+    function test_settle_noSpending_fullRefund() public {
+        uint256 tripId = _createTrip();
+        _depositAs(alice, tripId, 300e6);
+        _depositAs(bob, tripId, 300e6);
+
+        uint256 aliceBefore = usdc.balanceOf(alice);
+        uint256 bobBefore = usdc.balanceOf(bob);
+
+        vm.prank(alice);
+        treasury.settle(tripId);
+
+        assertEq(usdc.balanceOf(alice) - aliceBefore, 300e6);
+        assertEq(usdc.balanceOf(bob) - bobBefore, 300e6);
+    }
+
+    function test_settle_revertNonMember() public {
+        uint256 tripId = _createTrip();
+        _depositAs(alice, tripId, DEPOSIT_AMOUNT);
+
+        address stranger = makeAddr("stranger");
+        vm.prank(stranger);
+        vm.expectRevert("Not a member");
+        treasury.settle(tripId);
+    }
 }
