@@ -1,7 +1,7 @@
 // @ts-nocheck
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAccount } from "wagmi";
 import { formatUnits } from "viem";
 import {
@@ -12,6 +12,9 @@ import {
   useUsdcBalance,
   useDeposit,
 } from "@/lib/treasury";
+import { useAuth } from "@/context/AuthContext";
+import { getPayments, type PaymentData } from "@/lib/api";
+import PaymentApproval from "./PaymentApproval";
 
 interface TreasuryDashboardProps {
   tripId: bigint;
@@ -28,6 +31,17 @@ export default function TreasuryDashboard({ tripId }: TreasuryDashboardProps) {
   );
   const { data: usdcBalance } = useUsdcBalance(address);
   const { approveUsdc, deposit, isPending } = useDeposit();
+
+  const { token } = useAuth();
+  const [pendingPayments, setPendingPayments] = useState<PaymentData[]>([]);
+
+  useEffect(() => {
+    if (!token) return;
+    const tripIdStr = String(Number(tripId));
+    getPayments(tripIdStr, token)
+      .then((payments) => setPendingPayments(payments.filter((p) => p.status === "pending")))
+      .catch(() => {});
+  }, [token, tripId]);
 
   const [depositAmount, setDepositAmount] = useState("");
   const [depositStep, setDepositStep] = useState<
@@ -211,6 +225,28 @@ export default function TreasuryDashboard({ tripId }: TreasuryDashboardProps) {
                 address={member}
                 tripId={tripId}
                 isOrganizer={tripData && member.toLowerCase() === tripData.organizer?.toLowerCase()}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {pendingPayments.length > 0 && (
+        <div className="glass-card p-4">
+          <h4 className="text-sm font-medium text-[var(--text-secondary)] mb-3">
+            Pending Approvals
+          </h4>
+          <div className="space-y-3">
+            {pendingPayments.map((payment) => (
+              <PaymentApproval
+                key={payment.id}
+                payment={payment}
+                tripId={String(Number(tripId))}
+                onStatusChange={() => {
+                  setPendingPayments((prev) =>
+                    prev.filter((p) => p.id !== payment.id)
+                  );
+                }}
               />
             ))}
           </div>
