@@ -2,13 +2,23 @@
 
 **Date:** 2026-04-03
 **Event:** ETHGlobal Cannes 2026 (April 3-5)
-**Status:** Approved
+**Status:** Approved (v2 — revised)
 
 ---
 
 ## Overview
 
-RoadTrip Co-Pilot is a voice-first AI agent for group road trips. Friends pool USDC into a shared on-chain treasury. An OpenClaw-powered AI agent (Claude brain) manages the trip: finds stops, recommends options, and autonomously spends from the pool. Human-verified via World ID. All trip data persisted on 0G Storage.
+**"Give your car a wallet."**
+
+RoadTrip Co-Pilot is a voice-first AI agent for group road trips. Friends pool USDC into a shared on-chain treasury. A Claude-powered AI agent manages the trip from the car: finds stops, recommends options, and autonomously spends from the pool. Users connect via WalletConnect — the same wallet that funds the trip also authenticates the user, replacing traditional logins. All trip data persisted on 0G Storage.
+
+### The Narrative: Give Your Car a Wallet
+
+Your car has eyes (cameras), ears (microphones), a brain (AI) — but no wallet. It can't pay for gas, tolls, parking, or food. You have to stop, pull out your phone, open an app, tap buttons.
+
+RoadTrip Co-Pilot gives your car a crypto wallet. The AI agent holds a group treasury loaded with USDC. When you say "fill up the tank" or "book a hotel," the car pays — instantly, on-chain, from a shared pool. No apps, no tapping, no "who owes who." Just talk and go.
+
+This is what the agentic economy looks like when it meets the open road.
 
 ### Core Value Proposition
 
@@ -20,23 +30,34 @@ The crypto layer solves the group money problem: shared treasury with transparen
 
 ## Target Sponsors
 
-| Tier | Sponsor | Track | Prize | Role |
-|------|---------|-------|-------|------|
-| 1 | **Arc** | Agentic Economy with Nanopayments | $6K | Agent pays for trip expenses via USDC nanopayments |
-| 1 | **Arc** | Smart Contracts with Advanced Stablecoin Logic | $3K | Group escrow contract with conditional spending rules |
-| 1 | **World** | Best use of Agent Kit | $8K | Human-verified AI agent identity on every transaction |
-| 1 | **0G** | Best OpenClaw Agent on 0G | $6K | Agent framework + trip data on 0G Storage |
-| 2 | **WalletConnect** | Best Use of WalletConnect Pay | $4K | Wallet connection for deposits + spending UX |
+### How Arc and WalletConnect Fit Together
+
+Arc and WalletConnect are **complementary layers**, not competing:
+
+- **WalletConnect** = the **connectivity + UX layer**. How users connect wallets, how payments are initiated, how the agent interacts with wallets. WalletConnect Pay handles the payment UX.
+- **Arc** = the **settlement + chain layer**. Circle's stablecoin-native L1 where USDC is the native gas token. The treasury contract lives here. No need for a separate gas token — USDC pays for everything (gas + transactions).
+
+Together: Users connect wallets via WalletConnect → deposit USDC into treasury on Arc → agent spends from treasury using WalletConnect Pay → settlement happens on Arc with sub-second finality.
+
+### Sponsor Map
+
+| Tier | Sponsor | Track | Prize | Role in App |
+|------|---------|-------|-------|-------------|
+| 1 | **Arc** | Best Agentic Economy with Nanopayments | $6K | AI agent autonomously pays for trip expenses via USDC |
+| 1 | **Arc** | Best Smart Contracts with Advanced Stablecoin Logic | $3K | Group treasury contract — conditional escrow, programmable settlement |
+| 1 | **Arc** | Best Chain Abstracted USDC Apps Using Arc as Liquidity Hub | $3K | Treasury on Arc, USDC moves cross-chain seamlessly via CCTP/Gateway |
+| 1 | **WalletConnect** | Best Use of WalletConnect Pay | $4K | Agent-initiated payments, spending/budgeting UX, tap-to-pay |
+| 1 | **WalletConnect** | Best App Built with Reown SDK | $1K | Wallet-based auth (replacing API keys), multi-chain wallet connection |
+| 1 | **0G** | Best OpenClaw Agent on 0G | $6K | Agent framework + trip data on 0G Storage/Compute |
 | 2 | **Ledger** | AI Agents x Ledger | $6K | Hardware approval for high-value group spends |
-| | | **Total potential** | **$33K** | |
+| | | **Total potential** | **$29K** | |
 
 ### Deliverables per Sponsor
 
-- **Arc:** Functional MVP, architecture diagram, video demo, GitHub repo
-- **World:** Public GitHub repo, demo video (<=3 min), functional demo (no hard-coded values)
-- **0G:** Project name/description, contract deployment addresses, public GitHub repo with README, demo video (<=3 min)
-- **WalletConnect:** Public GitHub repo, demo video
-- **Ledger:** Contact Ledger developers for specific requirements
+- **Arc:** Functional MVP, architecture diagram, video demo, GitHub repo. Deploy on Arc testnet. Use Circle developer tools (USDC, Wallets SDK, Gateway, CCTP).
+- **WalletConnect:** Public GitHub repo, demo video (<=3 min). Use Reown AppKit for auth + WalletConnect Pay SDK for payments. Obtain WCPay ID from dashboard.walletconnect.com.
+- **0G:** Project name/description, contract addresses, public GitHub repo with README, demo video (<=3 min). Integrate 0G Storage + optionally Compute.
+- **Ledger:** Build agent with Ledger as trust layer for device-backed approval of high-value transactions.
 
 ---
 
@@ -44,58 +65,67 @@ The crypto layer solves the group money problem: shared treasury with transparen
 
 ### What It Is
 
-A shared on-chain smart contract where friends pool USDC for a road trip. The contract enforces spending rules, tracks every expense by category and person, and automatically settles when the trip ends.
+A shared on-chain smart contract on Arc where friends pool USDC for a road trip. USDC is Arc's native gas token, so there's no separate gas token to manage — everything is USDC. The contract enforces spending rules, tracks every expense by category and person, and automatically settles when the trip ends.
 
 ### User Flow
 
 **1. Trip Creation**
 
-The trip organizer creates a trip in the app, setting:
+The trip organizer creates a trip in the web app:
 - Trip name
 - Estimated total budget
-- Number of members
 - Spending categories: gas, food, lodging, activities
 - Per-transaction auto-spend limit (e.g., $100 — agent can spend up to this without group approval)
 - Daily spending cap (optional)
 
-**2. Inviting Friends**
+**2. Wallet-Based Login (WalletConnect replaces API keys)**
 
-The organizer shares an invite link. Each friend:
-- Connects their wallet via WalletConnect
-- Verifies their identity via World ID
-- Deposits their USDC share into the pool
+No username/password. No API keys. Users authenticate by connecting their wallet via Reown AppKit (WalletConnect). The connected wallet address IS the user identity. This replaces the nginx Bearer token auth from the existing claude-superapp architecture.
 
-All members see the pool fill up in real-time. Only World ID-verified members can join.
+Flow:
+- User clicks "Connect Wallet" → Reown AppKit modal → scans QR or selects wallet
+- Wallet signature proves ownership (Sign-In with Ethereum / SIWE)
+- Session token issued, tied to wallet address
+- All subsequent API calls authenticated via this session
 
-**3. During the Trip**
+**3. Depositing Funds**
 
-- Pool balance is always visible in the app
+Each friend:
+- Connects wallet via WalletConnect (this also logs them in)
+- Deposits their USDC share into the group pool on Arc
+- If their USDC is on another chain, Arc's Gateway/CCTP bridges it seamlessly (chain abstraction)
+
+All members see the pool fill up in real-time.
+
+**4. During the Trip**
+
+- Pool balance always visible in the app
 - Every agent spend appears as a line item: what, where, when, amount, category
-- Running per-person consumption is tracked: "Alice: $127, Bob: $94, Carol: $156"
+- Running per-person consumption tracked: "Alice: $127, Bob: $94, Carol: $156"
 - Category budget burn shown: "Food: $210 / $400, Gas: $89 / $200"
 
-**4. Trip End / Settlement**
+**5. Trip End / Settlement**
 
-- Organizer or any member triggers "end trip"
-- Leftover USDC is returned proportionally to depositors
+- Any member triggers "end trip"
+- Leftover USDC returned proportionally to depositors
 - Full spending breakdown exported (per person, per category)
-- On-chain receipt history remains permanently queryable
+- On-chain receipt history permanently queryable on Arc
 
-### Smart Contract Logic
+### Smart Contract Logic (Solidity, deployed on Arc testnet)
 
-- **Deposits:** USDC only (simplicity over flexibility)
-- **Spending rules:** Per-transaction cap, daily cap, category budgets — all configurable at trip creation
-- **Authorization:** Only the AI agent can initiate spends, and the agent must carry World ID proof that verified humans authorized it
-- **Group voting:** Spends exceeding the auto-limit trigger a vote. Configurable threshold (e.g., majority, unanimous)
+- **Deposits:** USDC only (native on Arc — no approval needed, direct transfer)
+- **Spending rules:** Per-transaction cap, daily cap, category budgets — configurable at trip creation
+- **Agent authorization:** Only the designated agent wallet can initiate spends
+- **Group voting:** Spends exceeding the auto-limit trigger a vote. Configurable threshold (majority/unanimous)
 - **Emergency withdrawal:** Any member can pull their remaining proportional share at any time
 - **On-chain receipts:** Every transaction emits events with: amount, recipient, category, timestamp, description
-- **Trip data persistence:** Itinerary, spending history, member preferences stored on 0G Storage
 
 ### Sponsor Mapping
 
-- **Arc (Stablecoin Logic):** The escrow contract with conditional USDC spending — conditional escrow, programmable settlement
-- **WalletConnect (Pay):** Wallet connection for deposits, spending/budgeting UX
-- **World (Agent Kit):** Identity gate — only World ID-verified members can join and authorize the agent
+- **Arc (Stablecoin Logic):** Conditional USDC escrow with programmable settlement rules
+- **Arc (Chain Abstracted):** Treasury on Arc, deposits accepted from any chain via CCTP/Gateway
+- **WalletConnect (Reown SDK):** Wallet-based authentication + wallet connection for deposits
+- **WalletConnect (Pay):** Payment initiation UX for the spending dashboard
 
 ---
 
@@ -103,156 +133,218 @@ All members see the pool fill up in real-time. Only World ID-verified members ca
 
 ### What It Is
 
-An OpenClaw-powered AI agent with Claude as the reasoning engine. It runs as a persistent background agent with modular skills. Users talk to it — it finds stops, recommends options, and pays from the group pool via Arc nanopayments. World ID proves every transaction is human-authorized.
+A Claude-powered AI agent running as a persistent Claude Code session (reusing the existing claude-superapp voice pipeline). The agent has custom MCP tools for places search, route planning, treasury management, and payments. Users talk to it — it finds stops, recommends options, and pays from the group pool via WalletConnect Pay on Arc.
 
-### Agent Architecture (OpenClaw on 0G)
+### Agent Tools (MCP Servers + Custom Tools)
 
-The co-pilot is an OpenClaw agent instance with the following custom skills:
+The agent gets its capabilities through MCP servers and custom tools loaded into the Claude Code session:
 
-| Skill | Purpose | External Dependency |
-|-------|---------|---------------------|
-| `places-search` | Search for restaurants, gas stations, hotels, attractions near the route | Google Places API |
-| `route-planner` | Compute optimal routes, ETAs, suggest detours | Google Routes API |
-| `weather-check` | Get real-time weather along the route | Google Weather API |
-| `treasury-spend` | Initiate a USDC payment from the group pool | Arc nanopayment rail |
-| `treasury-balance` | Check pool balance, per-person spend, category budgets | Group treasury contract |
-| `trip-memory` | Store/retrieve trip data, conversation history, preferences | 0G Storage |
-| `group-vote` | When spend exceeds limit, request group approval | Push notifications / in-app |
+**MCP Server: Google Maps (`mcp-google-map`)**
+- Existing open-source MCP server: `github.com/cablate/mcp-google-map`
+- Tools: `search_places`, `get_place_details`, `get_directions`, `search_nearby`, `search_text`
+- Requires: `GOOGLE_MAPS_API_KEY` env var
+- Gives the agent real place search, directions, and POI data
+
+**MCP Server: EVM/Blockchain (`evm-mcp-server`)**
+- Existing open-source: `github.com/mcpdotdirect/evm-mcp-server`
+- Tools: `get_balance`, `read_contract`, `send_transaction`, `get_token_balance`
+- Gives the agent ability to read treasury state, check balances, interact with smart contracts
+
+**Custom MCP Server: Trip Treasury**
+- Build custom — wraps the treasury smart contract in ergonomic tools
+- Tools:
+  - `treasury_balance` — current pool balance, per-person spend, category budgets
+  - `treasury_spend` — initiate a USDC payment from the pool (calls contract + WalletConnect Pay)
+  - `treasury_history` — recent transactions from the pool
+  - `group_vote_request` — trigger a vote for spends over the limit
+  - `group_vote_status` — check vote results
+
+**Custom MCP Server: Trip Memory (0G Storage)**
+- Build custom — wraps 0G Storage SDK
+- Tools:
+  - `save_trip_data` — persist itinerary, preferences, conversation context to 0G
+  - `load_trip_data` — retrieve persisted data
+  - `save_trip_photo` — store trip photos/media on 0G
+
+**Voice Channel (existing from claude-superapp)**
+- `voice_reply` tool — sends spoken response back through the TTS pipeline
+- Already implemented in the voice-channel MCP server
+
+### Integration with Existing claude-superapp
+
+The voice pipeline is reused from the existing architecture:
+
+```
+Web App (browser mic) OR Android Auto
+        |
+  [orchestrator :8080] ── FastAPI (reused, modified)
+     /        |
+[Voice VM]    |
+ (GPU VM)     |
+ Whisper STT  |
+ Kokoro TTS   |
+              |
+    [voice-channel :9000] (reused as-is)
+              |
+     [Claude Code session] ── persistent tmux
+       with MCP servers:
+       ├── mcp-google-map (places, directions)
+       ├── evm-mcp-server (blockchain reads)
+       ├── trip-treasury-mcp (custom, spending)
+       ├── trip-memory-mcp (custom, 0G storage)
+       └── voice-channel (voice reply)
+```
+
+**What changes from claude-superapp:**
+- **Orchestrator:** Replace nginx Bearer token auth with WalletConnect/SIWE session auth. Add trip management endpoints (`/v1/trip/create`, `/v1/trip/join`, `/v1/trip/deposit`, etc.).
+- **Claude Code session:** Load with road trip co-pilot CLAUDE.md persona + the MCP servers above. Different system prompt and skills.
+- **voice-channel:** Reuse as-is. The MCP notification pattern is identical.
+- **Voice VM:** Reuse as-is. Already deployed. STT + TTS unchanged.
+- **Frontend:** Build new web app for trip dashboard + voice interface (browser mic → orchestrator → voice pipeline).
 
 ### User Flow
 
 **1. Passive Monitoring**
 
 While driving, the agent monitors the route silently. It knows:
-- Current GPS location and heading
+- Current GPS location (sent from browser/phone)
 - Remaining route and ETA
-- Group preferences (dietary restrictions, budget sensitivity, pet-friendly needs)
+- Group preferences (dietary restrictions, budget sensitivity)
 - Treasury balance and budget status
 - Weather conditions ahead
 
-It stays quiet unless it has something genuinely useful.
-
 **2. Proactive Suggestions**
 
-The agent speaks up when it detects an opportunity or need:
-- "You're 20 minutes from a rest stop. There's a highly-rated diner 2 miles off the highway — burgers, $12 average. Want me to add it?"
-- "Gas is $3.20 here but $2.89 at the next exit in 15 minutes."
-- "You've been driving for 2 hours. There's a scenic overlook in 10 minutes — good stretch break."
-- "Rain starting in 45 minutes on your route. Might want to plan an indoor stop."
+The agent speaks up when it detects an opportunity:
+- "There's a highly-rated diner 2 miles off the highway — burgers, $12 average."
+- "Gas is $3.20 here but $2.89 at the next exit."
+- "Rain starting in 45 minutes on your route."
 
 **3. Voice Commands**
 
 Users speak naturally:
-- "Find us somewhere to eat that's under $15 per person"
-- "Where's the cheapest gas in the next 30 minutes?"
-- "Book us a campsite for tonight"
-- "How much have we spent on food today?"
-- "What's our pool balance?"
-
-Agent searches, presents 2-3 options with ratings and prices (read aloud), waits for selection.
+- "Find us somewhere to eat under $15 per person" → agent calls `search_places` MCP tool
+- "How much have we spent on food today?" → agent calls `treasury_balance` MCP tool
+- "Book that restaurant" → agent calls `treasury_spend` MCP tool
 
 **4. Autonomous Spending (under limit)**
 
-For pre-approved categories under the auto-spend limit, the agent transacts without asking:
+For pre-approved categories under the auto-spend limit:
 - "I topped up the toll pass — $4.50 from the pool."
-- "Ordered 3 coffees for pickup at the next Starbucks — $14.20. Ready in 8 minutes."
-
-Each spend is logged with full details on-chain.
+- Agent calls `treasury_spend` → smart contract executes → on-chain receipt emitted
+- Dashboard updates in real-time
 
 **5. Group Approval Flow (over limit)**
 
 For larger purchases:
-- "I found a hotel for tonight — $189 for two rooms at the Hampton Inn. This exceeds the $100 auto-spend limit."
-- "I've sent a vote to the group. 2 of 3 approvals needed."
-- Members approve via their phones (push notification + in-app action)
-- "Approved. Booking now." → Payment via Arc → On-chain receipt
+- Agent calls `group_vote_request` → notifications sent to members
+- Members approve via web app on their phones
+- Agent calls `treasury_spend` after approval threshold met
 
 ### 0G Integration
 
-- **Agent framework:** OpenClaw instance running on 0G infrastructure
-- **0G Storage:** Trip conversation history, user preferences, itinerary state, and agent memory persisted to 0G Storage. Survives restarts, accessible across devices. All trip data is decentralized and permanent.
-- **0G Compute:** Available for secondary tasks — trip summary generation, spending report compilation, route optimization
-
-### World ID Integration
-
-- Every group member verifies via World ID before joining the trip
-- The AI agent carries cryptographic proof that World ID-verified humans authorized it
-- Every agent-initiated transaction includes this proof
-- Merchants/services receiving payments can verify: "this spend was authorized by N verified humans, not a rogue bot"
-- This is the trust layer that makes autonomous agent spending viable for real-world commerce
+- **0G Storage:** Trip conversation history, user preferences, itinerary state persisted via `trip-memory-mcp`. Survives session restarts. Queryable across devices.
+- **0G Compute:** If needed, offload heavy tasks (route optimization, trip report generation)
+- **OpenClaw framing:** The agent is positioned as an OpenClaw-style agent running on 0G infrastructure. Claude is the LLM backend, 0G provides storage and compute.
 
 ### Arc Integration
 
-- Every payment is a USDC nanopayment through Arc's payment rail
-- Micro-transactions (tolls, coffee, snacks) are economically viable via Arc's nanopayment infrastructure
-- Larger transactions (hotels, gas fill-ups) use the same rail with higher amounts
-- All transactions settle on-chain with full receipt data
+- Treasury contract deployed on Arc testnet
+- USDC is native — no gas token management, no approve/transferFrom dance
+- Sub-second finality means payments confirm instantly for the demo
+- Cross-chain deposits via Circle CCTP/Gateway (if user's USDC is on Ethereum/Base/etc.)
+
+### WalletConnect Integration
+
+- **Auth:** Reown AppKit for wallet-based login (replaces API keys)
+- **Payments:** WalletConnect Pay for agent-initiated payment flows
+- **Agent SDK:** `@walletconnect/agent-sdk` for the agent's autonomous transactions — includes auto-bridging when funds are on wrong chain
+- **Multi-chain:** Reown AppKit supports EVM + Solana + other ecosystems
 
 ---
 
 ## 3-Minute Demo Flow
 
-This is the scripted demo for judges:
+**Narrative: "What if your car had a wallet?"**
 
-1. **Setup (30s):** Show 3 friends each connecting wallet via WalletConnect, verifying World ID, and depositing $200 USDC each into the group trip pool. Pool shows $600 balance.
+1. **Hook (15s):** "Your car has cameras, microphones, and AI. But it can't pay for anything. We're giving it a wallet."
 
-2. **Agent activation (15s):** Start the trip. The OpenClaw agent activates, shows the planned route, confirms preferences ("I know you prefer scenic routes, budget-friendly food, and pet-friendly stops").
+2. **Wallet Login (20s):** Show 3 friends each connecting wallet via WalletConnect QR scan — no passwords, no accounts. The wallet IS your identity.
 
-3. **Proactive suggestion (30s):** Agent speaks: "You're 25 minutes from a great BBQ place — 4.6 stars, $14 average. Only 1 mile off your route. Want me to check it out?" User responds by voice: "Yeah, sounds good."
+3. **Funding the car (20s):** Each friend deposits $200 USDC into the group pool on Arc. Pool shows $600 balance. "The car now has $600 to spend."
 
-4. **Autonomous payment (30s):** Agent: "Ordered 3 pulled pork combos for pickup — $38.50 from the pool." Show the on-chain transaction: Arc nanopayment, USDC deducted, receipt logged. Treasury dashboard updates in real-time.
+4. **The drive (30s):** Agent speaks: "There's a great BBQ place 2 miles off your route — 4.6 stars, $14 average. Want me to route there?" User says "Yeah, sounds good." Agent: "Added to route. ETA 25 minutes."
 
-5. **Budget check (15s):** "How are we doing on budget?" Agent: "You've spent $127 of $600. Food: $72 of $200 budget. Gas: $55 of $150. You're on track."
+5. **The car pays (30s):** Agent: "Ordered 3 pulled pork combos — $38.50 from the pool." Show the Arc transaction: USDC deducted, receipt on-chain, dashboard updates live. "No apps. No tapping. The car just paid."
 
-6. **Group vote (30s):** Agent: "I found a great Airbnb for tonight — $220. This exceeds your $100 auto-limit. Sending vote to the group." Show 2 of 3 members approving on their phones. "Approved — booking now." On-chain payment.
+6. **Budget awareness (15s):** "How's our budget?" Agent: "Spent $127 of $600. Food: $72 of $200. Gas: $55 of $150. You're on track."
 
-7. **Settlement (15s):** Trip ends. Show auto-settlement: remaining $253 returned proportionally. Full spending report: per-person breakdown, category totals, all on-chain.
+7. **Group approval (20s):** Agent: "Found a hotel for tonight — $220. This exceeds your $100 limit. Sent a vote." Show 2 of 3 approving on phones. "Booked."
 
-8. **Closing (15s):** Recap the tech stack: OpenClaw agent on 0G, Arc nanopayments, World ID verification, WalletConnect. "Group road trips, powered by crypto — no one has to chase Venmo requests again."
+8. **Settlement (15s):** Trip ends → auto-settle → $253 returned proportionally. Full breakdown on-chain.
+
+9. **Closing (15s):** "Give your car a wallet. RoadTrip Co-Pilot — built on Arc, WalletConnect, 0G, and Claude."
 
 ---
 
-## Technical Decisions (High-Level)
+## Technical Decisions
 
-These are directional — exact implementation details will be determined during planning.
+### Reused from claude-superapp (already deployed, working)
 
-- **Agent framework:** OpenClaw with Claude as LLM backend
-- **Blockchain:** Determined by Arc's supported chains (likely EVM-compatible L2)
-- **Smart contracts:** Solidity for the group treasury
-- **Voice I/O:** Gemini Live API or browser-based Web Speech API (evaluate during build)
-- **Location/Places data:** Google Maps Platform APIs (Places, Routes, Weather)
-- **Storage:** 0G Storage for trip data and agent state
-- **Wallet connection:** WalletConnect / Reown AppKit
-- **Identity:** World ID 4.0 via Agent Kit
-- **Frontend:** Web app (mobile-responsive) — no native mobile for hackathon scope
-- **Backend:** Node.js or Python service hosting the OpenClaw agent
+| Component | What | Port |
+|-----------|------|------|
+| Voice VM (GPU) | Whisper STT + Kokoro TTS | GPU VM, internal IP |
+| voice-channel | MCP bridge: HTTP ↔ Claude Code session | :9000 |
+| Session manager | tmux lifecycle for Claude Code sessions | :9001 |
+| Orchestrator (base) | FastAPI voice pipeline | :8080 |
+
+### Modified from claude-superapp
+
+| Component | Changes |
+|-----------|---------|
+| Orchestrator | Replace Bearer auth with WalletConnect/SIWE. Add trip endpoints. Add MCP server launch. |
+| Claude Code session | New CLAUDE.md persona. Load MCP servers for maps, blockchain, treasury, 0G. |
+
+### Built new
+
+| Component | Tech |
+|-----------|------|
+| Smart contracts | Solidity on Arc testnet. GroupTreasury.sol. |
+| Web frontend | React/Next.js. Reown AppKit for wallet. Voice UI via browser mic. |
+| Trip Treasury MCP | TypeScript MCP server wrapping treasury contract |
+| Trip Memory MCP | TypeScript MCP server wrapping 0G Storage SDK |
+| WalletConnect Pay integration | Agent SDK for autonomous payments |
+
+### Chain: Arc Testnet
+
+- EVM-compatible — standard Solidity, standard tooling (Hardhat/Foundry)
+- USDC is native gas token — no ETH needed, no faucet headaches
+- Sub-second finality — great for live demo
+- Circle developer tools: Wallets SDK, Gateway, CCTP
 
 ---
 
 ## Out of Scope (for hackathon)
 
-These are features from the original idea doc that are explicitly deferred:
-
-- Android Auto / CarPlay integration (requires app store approval process)
+- Android Auto / CarPlay native integration
 - Offline mode
 - EV/charging intelligence
 - Entertainment/playlist curation
-- Packing list assistant
 - Post-trip memory NFTs / POAPs
 - DAO governance / token incentives
-- Parametric insurance (Chainlink CRE)
+- Parametric insurance (Chainlink)
+- World ID verification (removed — overkill for MVP)
 - Multi-day itinerary auto-planning
 - AR overlays
-- Biometric mood detection
-- Physical crypto card integration (Gnosis Pay / Holyheld)
+- Physical crypto card integration
 
 ---
 
 ## Success Criteria
 
-1. Working demo where voice commands trigger real on-chain USDC payments from a group pool
-2. World ID verification gates group membership and agent authorization
-3. OpenClaw agent running on 0G with persistent trip memory
+1. Working demo where voice commands trigger real on-chain USDC payments from a group pool on Arc
+2. Wallet-based auth via WalletConnect (no passwords, no API keys)
+3. Agent has MCP tools for places search, treasury management, and 0G storage
 4. Real-time treasury dashboard showing balance, splits, and spending categories
-5. Judges can understand the product and its value in under 3 minutes
-6. Submissions accepted for Arc (both tracks), World, 0G, and optionally WalletConnect/Ledger
+5. Judges can understand "give your car a wallet" in under 30 seconds
+6. Submissions accepted for Arc (3 tracks), WalletConnect (2 tracks), 0G, and optionally Ledger
