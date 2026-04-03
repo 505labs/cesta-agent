@@ -1,0 +1,16 @@
+{
+  "name": "trip-treasury-mcp",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "start": "bun index.ts",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "viem": "^2.0.0"
+  },
+  "devDependencies": {
+    "bun-types": "latest"
+  }
+}
