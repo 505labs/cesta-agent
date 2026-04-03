@@ -8,15 +8,19 @@
 
 ## Executive Summary
 
-The current spec already includes Reown AppKit for wallet auth and mentions WalletConnect Pay for payments. This document argues for **significantly deeper integration** that makes WalletConnect infrastructure the nervous system of the entire payment experience — not just a wallet connect button and a payment API call.
+**WalletConnect is the human UX layer** of RoadTrip Co-Pilot. It handles everything a human touches: connecting wallets, funding the car's wallet, and approving large spends that exceed the auto-limit.
 
-The key insight: WalletConnect's ecosystem now includes three powerful pieces that map perfectly to our AI agent road trip use case:
+The key insight: WalletConnect and Arc nanopayments have a clean split based on **who initiates the payment**:
+- **Human initiates** (deposit, approve hotel booking) → **WalletConnect** (Reown AppKit + Pay)
+- **Agent initiates autonomously** (parking, tolls, fares, data APIs) → **Arc nanopayments** (gas-free, no UX)
 
-1. **Reown AppKit** — wallet connection, authentication, Smart Sessions, Smart Accounts
-2. **WalletConnect Pay** — merchant-grade payment infrastructure with ecommerce checkout
-3. **WalletConnect Agent SDK** — purpose-built for autonomous AI agents making wallet operations
+WalletConnect's three pieces map to the human side:
 
-Together, these enable: *"Users grant permissions → AI agent autonomously pays merchants via WalletConnect Pay → auto-bridging handles cross-chain complexity → all without the user touching their phone."*
+1. **Reown AppKit** — wallet connection, authentication, Smart Sessions (define what the agent can auto-spend)
+2. **WalletConnect Pay** — approval UX for large purchases that need group consent
+3. **WalletConnect Agent SDK** — cross-chain bridging for deposits from any chain
+
+WalletConnect does NOT handle autonomous micro-transactions (parking, tolls, fares). Those go through Arc nanopayments — streaming gas-free payments with no wallet popup.
 
 ---
 
@@ -139,9 +143,9 @@ The spec mentions "WalletConnect Pay for agent-initiated payment flows" and usin
 
 ### Recommended Deepened Integration
 
-#### Option A: Agent-Driven Payment Orchestration (Open Track — Recommended)
+#### Option A: Human-Approved Payment Orchestration (Open Track — Recommended)
 
-**The pitch:** The AI agent IS a WalletConnect Pay merchant. It creates payment requests, processes them via the Agent SDK, and settles on-chain — all autonomously.
+**The pitch:** WalletConnect Pay is the human approval layer for big decisions. When the agent finds a $220 hotel or a $45 gas fill-up that exceeds the auto-limit, it creates a WalletConnect Pay payment request that members approve via their connected wallets. Small pre-approved stuff (parking, tolls, fares) goes through Arc nanopayments without WC involvement.
 
 **Architecture:**
 

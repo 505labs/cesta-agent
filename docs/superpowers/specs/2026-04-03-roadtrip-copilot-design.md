@@ -30,32 +30,36 @@ The crypto layer solves the group money problem: shared treasury with transparen
 
 ## Target Sponsors
 
-### How Arc and WalletConnect Fit Together
+### How Arc and WalletConnect Fit Together — The Clean Split
 
-Arc and WalletConnect are **complementary layers**, not competing:
+Arc and WalletConnect are **complementary layers** with a clean boundary:
 
-- **WalletConnect** = the **connectivity + UX layer**. How users connect wallets, how payments are initiated, how the agent interacts with wallets. WalletConnect Pay handles the payment UX.
-- **Arc** = the **settlement + chain layer**. Circle's stablecoin-native L1 where USDC is the native gas token. The treasury contract lives here. No need for a separate gas token — USDC pays for everything (gas + transactions).
+- **WalletConnect** = the **human UX layer**. Everything a human touches: connecting wallets, depositing funds into the car's wallet, approving large spends. WalletConnect Pay handles merchant payments that need human approval (hotel bookings, big restaurant bills).
+- **Arc nanopayments** = the **autonomous agent layer**. Everything the AI agent does without human intervention: paying tolls, parking, small fares, API data calls. These are gas-free streaming micro-transactions that would be terrible UX if they required a wallet popup each time.
 
-Together: Users connect wallets via WalletConnect → deposit USDC into treasury on Arc → agent spends from treasury using WalletConnect Pay → settlement happens on Arc with sub-second finality.
+The split is about **who initiates the payment**:
+- Human initiates → WalletConnect (deposit, approve, tap-to-pay)
+- Agent initiates autonomously → Arc nanopayments (parking, fares, tolls, data APIs)
+
+Together: Users fund the car's wallet via WalletConnect → treasury on Arc holds the pool → agent streams nanopayments from the pool for pre-approved categories (no human needed) → large spends go through WalletConnect approval flow.
 
 ### Sponsor Map
 
 | Tier | Sponsor | Track | Prize | Role in App |
 |------|---------|-------|-------|-------------|
-| 1 | **Arc** | Best Agentic Economy with Nanopayments | $6K | AI agent autonomously pays for trip expenses via USDC |
-| 1 | **Arc** | Best Smart Contracts with Advanced Stablecoin Logic | $3K | Group treasury contract — conditional escrow, programmable settlement |
-| 1 | **Arc** | Best Chain Abstracted USDC Apps Using Arc as Liquidity Hub | $3K | Treasury on Arc, USDC moves cross-chain seamlessly via CCTP/Gateway |
-| 1 | **WalletConnect** | Best Use of WalletConnect Pay | $4K | Agent-initiated payments, spending/budgeting UX, tap-to-pay |
+| 1 | **Arc** | Best Agentic Economy with Nanopayments | $6K | **Primary Arc track.** Agent streams autonomous gas-free nanopayments for parking, fares, tolls, API data — anything pre-approved, no human needed |
+| 1 | **Arc** | Best Smart Contracts with Advanced Stablecoin Logic | $3K | Secondary: treasury contract qualifies naturally (escrow, budgets, voting, settlement) |
+| 1 | **WalletConnect** | Best Use of WalletConnect Pay | $4K | Human UX: deposits into car wallet, approval flow for big spends, spending/budgeting dashboard |
 | 1 | **WalletConnect** | Best App Built with Reown SDK | $1K | Wallet-based auth (replacing API keys), multi-chain wallet connection |
 | 1 | **0G** | Best OpenClaw Agent on 0G | $6K | Agent framework + trip data on 0G Storage/Compute |
 | 2 | **Ledger** | AI Agents x Ledger | $6K | Hardware approval for high-value group spends |
-| | | **Total potential** | **$29K** | |
+| | | **Total potential** | **$26K** | |
 
 ### Deliverables per Sponsor
 
-- **Arc:** Functional MVP, architecture diagram, video demo, GitHub repo. Deploy on Arc testnet. Use Circle developer tools (USDC, Wallets SDK, Gateway, CCTP).
-- **WalletConnect:** Public GitHub repo, demo video (<=3 min). Use Reown AppKit for auth + WalletConnect Pay SDK for payments. Obtain WCPay ID from dashboard.walletconnect.com.
+- **Arc (Track 3 — Agentic Nanopayments, primary):** Functional MVP, architecture diagram, video demo, GitHub repo. Deploy on Arc testnet. Show agent streaming gas-free nanopayments for parking/fares/tolls/data APIs autonomously. Use Circle developer tools (USDC, Nanopayments, x402, Programmable Wallets).
+- **Arc (Track 1 — Stablecoin Logic, secondary):** Same deliverables — the treasury contract qualifies naturally.
+- **WalletConnect:** Public GitHub repo, demo video (<=3 min). Use Reown AppKit for wallet auth + deposits. WalletConnect Pay for human-approved spend flows (big purchases needing group vote). Obtain WCPay ID from dashboard.walletconnect.com.
 - **0G:** Project name/description, contract addresses, public GitHub repo with README, demo video (<=3 min). Integrate 0G Storage + optionally Compute.
 - **Ledger:** Build agent with Ledger as trust layer for device-backed approval of high-value transactions.
 
@@ -122,10 +126,9 @@ All members see the pool fill up in real-time.
 
 ### Sponsor Mapping
 
-- **Arc (Stablecoin Logic):** Conditional USDC escrow with programmable settlement rules
-- **Arc (Chain Abstracted):** Treasury on Arc, deposits accepted from any chain via CCTP/Gateway
-- **WalletConnect (Reown SDK):** Wallet-based authentication + wallet connection for deposits
-- **WalletConnect (Pay):** Payment initiation UX for the spending dashboard
+- **Arc (Stablecoin Logic — secondary track):** Conditional USDC escrow with programmable settlement rules
+- **WalletConnect (Reown SDK):** Wallet-based authentication + wallet connection for deposits into the car's wallet
+- **WalletConnect (Pay):** Human-facing UX for approving large spends from the treasury dashboard
 
 ---
 
@@ -227,19 +230,22 @@ Users speak naturally:
 - "How much have we spent on food today?" → agent calls `treasury_balance` MCP tool
 - "Book that restaurant" → agent calls `treasury_spend` MCP tool
 
-**4. Autonomous Spending (under limit)**
+**4. Autonomous Spending via Arc Nanopayments (under limit, no human needed)**
 
-For pre-approved categories under the auto-spend limit:
+For pre-approved categories under the auto-spend limit — parking, tolls, fares, data APIs:
 - "I topped up the toll pass — $4.50 from the pool."
-- Agent calls `treasury_spend` → smart contract executes → on-chain receipt emitted
+- Agent streams a gas-free nanopayment on Arc → on-chain receipt emitted
+- No wallet popup, no human approval, no UX friction — the agent just pays
 - Dashboard updates in real-time
+- This is the **Arc Track 3 (Agentic Nanopayments)** integration
 
-**5. Group Approval Flow (over limit)**
+**5. Group Approval Flow via WalletConnect (over limit, human approves)**
 
-For larger purchases:
+For larger purchases that exceed the auto-spend limit:
 - Agent calls `group_vote_request` → notifications sent to members
-- Members approve via web app on their phones
+- Members approve via WalletConnect-connected wallets on their phones
 - Agent calls `treasury_spend` after approval threshold met
+- This is the **WalletConnect Pay** integration — human-facing UX for big decisions
 
 ### 0G Integration
 
@@ -247,19 +253,28 @@ For larger purchases:
 - **0G Compute:** If needed, offload heavy tasks (route optimization, trip report generation)
 - **OpenClaw framing:** The agent is positioned as an OpenClaw-style agent running on 0G infrastructure. Claude is the LLM backend, 0G provides storage and compute.
 
-### Arc Integration
+### Arc Integration — The Autonomous Agent Layer (Track 3: Agentic Nanopayments)
 
-- Treasury contract deployed on Arc testnet
-- USDC is native — no gas token management, no approve/transferFrom dance
-- Sub-second finality means payments confirm instantly for the demo
-- Cross-chain deposits via Circle CCTP/Gateway (if user's USDC is on Ethereum/Base/etc.)
+Arc handles everything the agent does without human involvement:
 
-### WalletConnect Integration
+- **Nanopayments for pre-approved spending:** Agent streams gas-free USDC payments for parking ($3), tolls ($5), fares ($8), small food purchases ($12) — anything under the auto-spend limit. No wallet popup, no gas cost, no UX friction. This is economically impossible on Ethereum (gas > payment) but trivial on Arc.
+- **Nanopayments for data APIs (x402):** Agent pays $0.001-$0.01 per API call for gas prices, weather, restaurant data — the agent buys its own intelligence from the treasury.
+- **Treasury contract on Arc testnet:** USDC is native gas token — one token for everything. Sub-second finality means dashboard updates instantly.
+- **Agent identity (ERC-8004):** Verifiable on-chain identity for the AI agent — reputation and trust.
 
-- **Auth:** Reown AppKit for wallet-based login (replaces API keys)
-- **Payments:** WalletConnect Pay for agent-initiated payment flows
-- **Agent SDK:** `@walletconnect/agent-sdk` for the agent's autonomous transactions — includes auto-bridging when funds are on wrong chain
-- **Multi-chain:** Reown AppKit supports EVM + Solana + other ecosystems
+Arc does NOT handle: wallet connection, user authentication, or human-approved payments. Those go through WalletConnect.
+
+### WalletConnect Integration — The Human UX Layer
+
+WalletConnect handles everything a human touches:
+
+- **Auth:** Reown AppKit for wallet-based login (replaces API keys) — this IS how you log in
+- **Deposits:** WalletConnect is how users fund the car's wallet — connect wallet, deposit USDC from any chain
+- **Approvals:** WalletConnect Pay for human-approved spend flows — hotel bookings, big restaurant bills, anything over the auto-spend limit that needs a group vote
+- **Dashboard:** Spending/budgeting UX where users see where their money went
+- **Multi-chain:** Reown AppKit supports EVM + Solana — friends aren't excluded by chain choice
+
+WalletConnect does NOT handle: autonomous agent micro-transactions (parking, tolls, fares). Those go through Arc nanopayments — no wallet popup, no human in the loop.
 
 ---
 
@@ -273,13 +288,13 @@ For larger purchases:
 
 3. **Funding the car (20s):** Each friend deposits $200 USDC into the group pool on Arc. Pool shows $600 balance. "The car now has $600 to spend."
 
-4. **The drive (30s):** Agent speaks: "There's a great BBQ place 2 miles off your route — 4.6 stars, $14 average. Want me to route there?" User says "Yeah, sounds good." Agent: "Added to route. ETA 25 minutes."
+4. **Autonomous nanopayments — the car just pays (30s):** Agent: "Toll ahead — $4.50." Show Arc nanopayment: gas-free, instant, no popup, no approval. Then: "Parking at the restaurant — $6." Another nanopayment streams automatically. Dashboard updates live. "The car handles parking, tolls, and fares on its own — no apps, no tapping."
 
-5. **The car pays (30s):** Agent: "Ordered 3 pulled pork combos — $38.50 from the pool." Show the Arc transaction: USDC deducted, receipt on-chain, dashboard updates live. "No apps. No tapping. The car just paid."
+5. **The drive + food (30s):** Agent speaks: "There's a great BBQ place 2 miles off your route — 4.6 stars, $14 average." User says "Yeah, go ahead." Agent: "Ordered 3 pulled pork combos — $38.50 from the pool." Nanopayment on Arc. Dashboard updates. "Under the auto-limit, so the car just paid."
 
-6. **Budget awareness (15s):** "How's our budget?" Agent: "Spent $127 of $600. Food: $72 of $200. Gas: $55 of $150. You're on track."
+6. **Budget awareness (15s):** "How's our budget?" Agent: "Spent $127 of $600. Food: $72 of $200. Gas: $55 of $150. Parking & tolls: $18 of $50. You're on track."
 
-7. **Group approval (20s):** Agent: "Found a hotel for tonight — $220. This exceeds your $100 limit. Sent a vote." Show 2 of 3 approving on phones. "Booked."
+7. **Group approval via WalletConnect (20s):** Agent: "Found a hotel for tonight — $220. This exceeds your $100 limit. Sent a vote." Show 2 of 3 approving on their phones via WalletConnect. "Big decisions need human approval. Small stuff, the car handles."
 
 8. **Settlement (15s):** Trip ends → auto-settle → $253 returned proportionally. Full breakdown on-chain.
 
@@ -313,14 +328,15 @@ For larger purchases:
 | Web frontend | React/Next.js. Reown AppKit for wallet. Voice UI via browser mic. |
 | Trip Treasury MCP | TypeScript MCP server wrapping treasury contract |
 | Trip Memory MCP | TypeScript MCP server wrapping 0G Storage SDK |
-| WalletConnect Pay integration | Agent SDK for autonomous payments |
+| WalletConnect Pay integration | Human-facing deposit + approval UX via Reown AppKit + Pay SDK |
+| Arc Nanopayments integration | x402/nanopayments for agent autonomous micro-transactions |
 
 ### Chain: Arc Testnet
 
 - EVM-compatible — standard Solidity, standard tooling (Hardhat/Foundry)
-- USDC is native gas token — no ETH needed, no faucet headaches
+- USDC is native gas token — gas-free nanopayments make $0.50 parking payments viable
 - Sub-second finality — great for live demo
-- Circle developer tools: Wallets SDK, Gateway, CCTP
+- Circle developer tools: Nanopayments, x402, Programmable Wallets, Gateway
 
 ---
 
@@ -343,8 +359,10 @@ For larger purchases:
 ## Success Criteria
 
 1. Working demo where voice commands trigger real on-chain USDC payments from a group pool on Arc
-2. Wallet-based auth via WalletConnect (no passwords, no API keys)
-3. Agent has MCP tools for places search, treasury management, and 0G storage
-4. Real-time treasury dashboard showing balance, splits, and spending categories
-5. Judges can understand "give your car a wallet" in under 30 seconds
-6. Submissions accepted for Arc (3 tracks), WalletConnect (2 tracks), 0G, and optionally Ledger
+2. Wallet-based auth + deposits via WalletConnect (no passwords, no API keys)
+3. Agent autonomously streams nanopayments on Arc for parking, fares, tolls (no human approval)
+4. Large spends trigger group approval via WalletConnect (human UX for big decisions)
+5. Agent has MCP tools for places search, treasury management, and 0G storage
+6. Real-time treasury dashboard showing balance, splits, and spending categories
+7. Judges can understand "give your car a wallet" in under 30 seconds
+8. Submissions accepted for Arc (Track 3 primary + Track 1 secondary), WalletConnect (2 tracks), 0G, and optionally Ledger
