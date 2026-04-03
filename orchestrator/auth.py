@@ -10,11 +10,14 @@ Flow:
 Uses eth_account for signature verification (more reliable than the siwe package).
 """
 
+import os
 import secrets
 import time
 
 from eth_account.messages import encode_defunct
 from eth_account import Account
+
+ALLOWED_DOMAINS = os.environ.get("ALLOWED_DOMAINS", "localhost,localhost:3000,localhost:8080").split(",")
 
 # In-memory nonce store (good enough for hackathon)
 _nonces: dict[str, float] = {}  # nonce -> expiry timestamp
@@ -75,6 +78,12 @@ def verify_siwe(message: str, signature: str) -> str:
     expiry = _nonces.pop(nonce, None)
     if expiry is None or time.time() > expiry:
         raise ValueError("Invalid or expired nonce")
+
+    # Validate domain
+    domain = parsed.get("domain", "")
+    if domain and ALLOWED_DOMAINS[0] != "*":
+        if domain not in ALLOWED_DOMAINS:
+            raise ValueError(f"Domain not allowed: {domain}")
 
     # Verify signature using eth_account
     message_hash = encode_defunct(text=message)
