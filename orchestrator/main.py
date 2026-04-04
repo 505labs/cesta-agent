@@ -9,6 +9,12 @@ import asyncio
 import logging
 import os
 import time
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+# Load root .env (one level up from orchestrator/)
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 import httpx
 from fastapi import FastAPI, File, Form, Header, HTTPException, Request, Response, UploadFile
@@ -36,21 +42,22 @@ app.add_middleware(
 app.include_router(trips_router)
 
 # --- Config ---
-VOICE_VM_INTERNAL_IP = os.environ.get("VOICE_VM_INTERNAL_IP", "")
-VOICE_API_KEY = os.environ.get("VOICE_API_KEY", "")
+# Core VM proxy (routes to voice VM internally)
+CORE_VM_URL = os.environ.get("CORE_VM_URL", "http://34.134.200.237")
+CORE_VM_API_KEY = os.environ.get("CORE_VM_API_KEY", "")
 VOICE_CHANNEL_URL = os.environ.get("VOICE_CHANNEL_URL", "http://localhost:9000")
-TTS_SERVICE_URL = os.environ.get("TTS_SERVICE_URL", "http://localhost:8000")
-TTS_VOICE = os.environ.get("TTS_VOICE", "en_GB-cori-high")
+TTS_VOICE = os.environ.get("TTS_VOICE", "bf_emma")
+TTS_SPEED = float(os.environ.get("TTS_SPEED", "1.1"))
 
 START_TIME = time.time()
 
 
 def voice_base_url() -> str:
-    return f"http://{VOICE_VM_INTERNAL_IP}:8000" if VOICE_VM_INTERNAL_IP else ""
+    return CORE_VM_URL if CORE_VM_URL else ""
 
 
 def voice_headers() -> dict:
-    return {"Authorization": f"Bearer {VOICE_API_KEY}"} if VOICE_API_KEY else {}
+    return {"Authorization": f"Bearer {CORE_VM_API_KEY}"} if CORE_VM_API_KEY else {}
 
 
 @app.on_event("startup")
@@ -168,18 +175,26 @@ def _pcm_to_wav(pcm_data: bytes, sample_rate: int = 22050) -> bytes:
 
 
 async def _text_to_speech(text: str) -> bytes:
+    base = voice_base_url()
+    if not base:
+        raise Exception("Core VM not configured")
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
             resp = await client.post(
-                f"{TTS_SERVICE_URL}/v1/tts/stream",
-                json={"text": text, "voice": TTS_VOICE, "speed": 1.0},
+                f"{base}/v1/audio/speech",
+                headers=voice_headers(),
+                json={"input": text, "model": "speaches-ai/Kokoro-82M-v1.0-ONNX-fp16", "voice": TTS_VOICE, "speed": TTS_SPEED},
             )
             if resp.status_code != 200:
                 raise Exception(f"TTS returned {resp.status_code}")
-            sample_rate = int(resp.headers.get("X-Sample-Rate", "22050"))
-            return _pcm_to_wav(resp.content, sample_rate=sample_rate)
+            # Speaches returns audio directly (wav/mp3), not raw PCM
+            content_type = resp.headers.get("content-type", "")
+            if "pcm" in content_type or "octet-stream" in content_type:
+                sample_rate = int(resp.headers.get("X-Sample-Rate", "24000"))
+                return _pcm_to_wav(resp.content, sample_rate=sample_rate)
+            return resp.content
     except httpx.ConnectError:
-        raise Exception("TTS service unreachable")
+        raise Exception("Core VM unreachable")
 
 
 @app.post("/v1/voice/converse")
@@ -195,7 +210,7 @@ async def voice_converse(
 
     base = voice_base_url()
     if not base:
-        raise HTTPException(status_code=503, detail="Voice VM not configured")
+        raise HTTPException(status_code=503, detail="Core VM not configured. Set CORE_VM_URL.")
 
     audio_bytes = await audio.read()
     filename = audio.filename or "audio.wav"
