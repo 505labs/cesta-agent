@@ -24,8 +24,8 @@ if [ -d "$ROADTRIP_DIR/.git" ]; then
 else
   echo "Cloning $REPO_URL to $ROADTRIP_DIR..."
   sudo mkdir -p "$(dirname "$ROADTRIP_DIR")"
-  sudo git clone "$REPO_URL" "$ROADTRIP_DIR"
-  sudo chown -R "$(whoami)" "$ROADTRIP_DIR"
+  sudo chown "$(whoami)" "$(dirname "$ROADTRIP_DIR")"
+  git clone "$REPO_URL" "$ROADTRIP_DIR"
 fi
 
 # --- Create data directories (not in repo) ---

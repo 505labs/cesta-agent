@@ -36,7 +36,7 @@ start: ## Create and activate the roadtrip session
 	@if [ -z "$(ZONE)" ]; then echo "VM '$(APP_VM_NAME)' not found"; exit 1; fi; \
 	echo "Starting roadtrip bot on $(APP_VM_NAME)..."; \
 	gcloud compute ssh $(APP_VM_NAME) --zone=$(ZONE) --project=$(PROJECT) --tunnel-through-iap \
-		-- "bash $(REMOTE_DIR)/scripts/start.sh"
+		-- "bash $(REMOTE_DIR)/deploy/start.sh"
 
 stop: ## Stop the roadtrip session
 	@if [ -z "$(ZONE)" ]; then echo "VM '$(APP_VM_NAME)' not found"; exit 1; fi; \
