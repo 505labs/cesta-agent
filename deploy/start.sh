@@ -13,6 +13,14 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROADTRIP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 AGENT_DIR="${ROADTRIP_AGENT_DIR:-$ROADTRIP_DIR/agent}"
 
+# --- Load .env so MCP servers get env vars ---
+if [ -f "$ROADTRIP_DIR/.env" ]; then
+  set -a
+  source "$ROADTRIP_DIR/.env"
+  set +a
+  echo "Loaded environment from $ROADTRIP_DIR/.env"
+fi
+
 # --- Verify prerequisites ---
 if ! command -v tmux >/dev/null 2>&1; then
   echo "Error: tmux is not installed."

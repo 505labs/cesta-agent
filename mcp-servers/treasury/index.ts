@@ -22,23 +22,31 @@ import {
   formatUnits,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { foundry } from "viem/chains";
+import { defineChain } from "viem";
 import { GROUP_TREASURY_ABI } from "./abi.js";
 
 // --- Config ---
-const RPC_URL = process.env.RPC_URL ?? "http://127.0.0.1:8545";
-const AGENT_PRIVATE_KEY = process.env.AGENT_PRIVATE_KEY as
-  | `0x${string}`
-  | undefined;
+const RPC_URL = process.env.RPC_URL ?? "https://rpc.testnet.arc.network";
+const RAW_PRIVATE_KEY = process.env.AGENT_PRIVATE_KEY ?? "";
+const AGENT_PRIVATE_KEY: `0x${string}` | undefined =
+  RAW_PRIVATE_KEY.match(/^0x[0-9a-fA-F]{64}$/) ? (RAW_PRIVATE_KEY as `0x${string}`) : undefined;
 const TREASURY_ADDRESS = process.env.TREASURY_ADDRESS as
   | `0x${string}`
   | undefined;
-const CHAIN_ID = parseInt(process.env.CHAIN_ID ?? "31337", 10);
+const CHAIN_ID = parseInt(process.env.CHAIN_ID ?? "5042002", 10);
 const X402_SERVER_URL =
   process.env.X402_SERVER_URL ?? "http://localhost:4402";
 
 // --- Viem Clients ---
-const chain = { ...foundry, id: CHAIN_ID };
+const chain = defineChain({
+  id: CHAIN_ID,
+  name: CHAIN_ID === 5042002 ? "Arc Testnet" : `Chain ${CHAIN_ID}`,
+  nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
+  rpcUrls: { default: { http: [RPC_URL] } },
+  blockExplorers: CHAIN_ID === 5042002
+    ? { default: { name: "ArcScan", url: "https://testnet.arcscan.app" } }
+    : undefined,
+});
 const transport = http(RPC_URL);
 const publicClient = createPublicClient({ chain, transport });
 
@@ -48,6 +56,8 @@ if (AGENT_PRIVATE_KEY) {
   const account = privateKeyToAccount(AGENT_PRIVATE_KEY);
   agentAddress = account.address;
   walletClient = createWalletClient({ account, chain, transport });
+} else if (RAW_PRIVATE_KEY) {
+  console.error(`[treasury] Invalid AGENT_PRIVATE_KEY format (expected 0x + 64 hex chars) — wallet disabled`);
 }
 
 // --- x402 helper ---
