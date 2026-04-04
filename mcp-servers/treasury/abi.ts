@@ -240,4 +240,162 @@ export const GROUP_TREASURY_ABI = [
     outputs: [{ name: "", type: "bool" }],
     stateMutability: "view",
   },
+
+  // --- Enhanced Treasury: Events ---
+  {
+    type: "event",
+    name: "CategoryBudgetSet",
+    inputs: [
+      { name: "tripId", type: "uint256", indexed: true },
+      { name: "category", type: "string", indexed: false },
+      { name: "budget", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    type: "event",
+    name: "NanopaymentProcessed",
+    inputs: [
+      { name: "tripId", type: "uint256", indexed: true },
+      { name: "recipient", type: "address", indexed: true },
+      { name: "amount", type: "uint256", indexed: false },
+      { name: "category", type: "string", indexed: false },
+      { name: "description", type: "string", indexed: false },
+    ],
+  },
+  {
+    type: "event",
+    name: "VoteRequested",
+    inputs: [
+      { name: "voteId", type: "uint256", indexed: true },
+      { name: "tripId", type: "uint256", indexed: true },
+      { name: "amount", type: "uint256", indexed: false },
+      { name: "description", type: "string", indexed: false },
+    ],
+  },
+  {
+    type: "event",
+    name: "VoteCast",
+    inputs: [
+      { name: "voteId", type: "uint256", indexed: true },
+      { name: "voter", type: "address", indexed: true },
+      { name: "approved", type: "bool", indexed: false },
+    ],
+  },
+  {
+    type: "event",
+    name: "VoteExecuted",
+    inputs: [
+      { name: "voteId", type: "uint256", indexed: true },
+      { name: "tripId", type: "uint256", indexed: true },
+    ],
+  },
+
+  // --- Enhanced Treasury: Write functions ---
+  {
+    type: "function",
+    name: "setDailyCap",
+    inputs: [
+      { name: "_tripId", type: "uint256" },
+      { name: "_dailyCap", type: "uint256" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "setCategoryBudget",
+    inputs: [
+      { name: "_tripId", type: "uint256" },
+      { name: "_category", type: "string" },
+      { name: "_budget", type: "uint256" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "nanopayment",
+    inputs: [
+      { name: "_tripId", type: "uint256" },
+      { name: "_recipient", type: "address" },
+      { name: "_amount", type: "uint256" },
+      { name: "_category", type: "string" },
+      { name: "_description", type: "string" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "requestVote",
+    inputs: [
+      { name: "_tripId", type: "uint256" },
+      { name: "_recipient", type: "address" },
+      { name: "_amount", type: "uint256" },
+      { name: "_category", type: "string" },
+      { name: "_description", type: "string" },
+      { name: "_threshold", type: "uint256" },
+    ],
+    outputs: [{ name: "voteId", type: "uint256" }],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "castVote",
+    inputs: [{ name: "_voteId", type: "uint256" }],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "executeVote",
+    inputs: [{ name: "_voteId", type: "uint256" }],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+
+  // --- Enhanced Treasury: View functions ---
+  {
+    type: "function",
+    name: "getCategoryBudget",
+    inputs: [
+      { name: "_tripId", type: "uint256" },
+      { name: "_category", type: "string" },
+    ],
+    outputs: [
+      { name: "budget", type: "uint256" },
+      { name: "spent", type: "uint256" },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "getDailySpending",
+    inputs: [{ name: "_tripId", type: "uint256" }],
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "getNanopaymentTotal",
+    inputs: [{ name: "_tripId", type: "uint256" }],
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "getVoteRequest",
+    inputs: [{ name: "_voteId", type: "uint256" }],
+    outputs: [
+      { name: "", type: "uint256" },
+      { name: "", type: "address" },
+      { name: "", type: "uint256" },
+      { name: "", type: "string" },
+      { name: "", type: "string" },
+      { name: "", type: "uint256" },
+      { name: "", type: "uint256" },
+      { name: "", type: "bool" },
+    ],
+    stateMutability: "view",
+  },
 ] as const;

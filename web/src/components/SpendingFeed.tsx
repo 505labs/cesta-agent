@@ -1,7 +1,7 @@
 "use client";
 
 import { formatUnits } from "viem";
-import { useTripSpends } from "@/lib/treasury";
+import { useTripSpends, useNanopaymentTotal, useDailySpending } from "@/lib/treasury";
 
 interface SpendingFeedProps {
   tripId: bigint;
@@ -9,39 +9,25 @@ interface SpendingFeedProps {
 
 const CATEGORY_CONFIG: Record<
   string,
-  { color: string; icon: string; bg: string }
+  { color: string; bg: string; label: string }
 > = {
-  food: {
-    color: "var(--accent-amber)",
-    bg: "var(--accent-amber)",
-    icon: "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z",
-  },
-  gas: {
-    color: "var(--accent-red)",
-    bg: "var(--accent-red)",
-    icon: "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z",
-  },
-  lodging: {
-    color: "var(--accent-purple)",
-    bg: "var(--accent-purple)",
-    icon: "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z",
-  },
-  activities: {
-    color: "var(--accent-blue)",
-    bg: "var(--accent-blue)",
-    icon: "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z",
-  },
+  food: { color: "var(--accent-amber)", bg: "var(--accent-amber)", label: "F" },
+  gas: { color: "var(--accent-red)", bg: "var(--accent-red)", label: "G" },
+  lodging: { color: "var(--accent-purple)", bg: "var(--accent-purple)", label: "L" },
+  activities: { color: "var(--accent-blue)", bg: "var(--accent-blue)", label: "A" },
+  parking: { color: "#6366f1", bg: "#6366f1", label: "P" },
+  tolls: { color: "#f97316", bg: "#f97316", label: "T" },
+  data: { color: "#06b6d4", bg: "#06b6d4", label: "D" },
+  fares: { color: "#8b5cf6", bg: "#8b5cf6", label: "$" },
 };
 
-const CATEGORY_EMOJI: Record<string, string> = {
-  food: "F",
-  gas: "G",
-  lodging: "L",
-  activities: "A",
-};
+// Nanopayment categories — these are autonomous agent micro-transactions
+const NANOPAYMENT_CATEGORIES = new Set(["parking", "tolls", "data", "fares"]);
 
 export default function SpendingFeed({ tripId }: SpendingFeedProps) {
   const { data: spends, isLoading } = useTripSpends(tripId);
+  const { data: nanopaymentTotal } = useNanopaymentTotal(tripId);
+  const { data: dailySpending } = useDailySpending(tripId);
 
   const spendList = (spends as any[]) || [];
 
@@ -55,8 +41,39 @@ export default function SpendingFeed({ tripId }: SpendingFeedProps) {
     categoryTotals[cat] = (categoryTotals[cat] || BigInt(0)) + BigInt(s.amount || 0);
   }
 
+  const nanopaymentUsd = nanopaymentTotal ? Number(formatUnits(nanopaymentTotal as bigint, 6)) : 0;
+  const dailyUsd = dailySpending ? Number(formatUnits(dailySpending as bigint, 6)) : 0;
+
   return (
     <div className="space-y-4">
+      {/* Nanopayment & Daily Stats */}
+      {(nanopaymentUsd > 0 || dailyUsd > 0) && (
+        <div className="glass-card p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-2 h-2 rounded-full bg-[#06b6d4] animate-pulse" />
+            <h4 className="text-sm font-medium text-[var(--text-secondary)]">
+              Arc Nanopayments
+            </h4>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="py-2 px-3 rounded-lg bg-[var(--bg-secondary)]">
+              <p className="text-xs text-[var(--text-secondary)]">Autonomous spending</p>
+              <p className="text-lg font-mono font-medium" style={{ color: "#06b6d4" }}>
+                ${nanopaymentUsd.toFixed(4)}
+              </p>
+              <p className="text-xs text-[var(--text-secondary)]">gas-free on Arc</p>
+            </div>
+            <div className="py-2 px-3 rounded-lg bg-[var(--bg-secondary)]">
+              <p className="text-xs text-[var(--text-secondary)]">Today&apos;s spending</p>
+              <p className="text-lg font-mono font-medium">
+                ${dailyUsd.toFixed(2)}
+              </p>
+              <p className="text-xs text-[var(--text-secondary)]">daily total</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Category Breakdown */}
       {Object.keys(categoryTotals).length > 0 && (
         <div className="glass-card p-4">
@@ -78,7 +95,7 @@ export default function SpendingFeed({ tripId }: SpendingFeedProps) {
                     className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold text-white"
                     style={{ backgroundColor: config.bg, opacity: 0.8 }}
                   >
-                    {CATEGORY_EMOJI[cat] || "?"}
+                    {CATEGORY_CONFIG[cat]?.label || "?"}
                   </div>
                   <div>
                     <p className="text-sm capitalize font-medium">{cat}</p>
@@ -132,14 +149,19 @@ export default function SpendingFeed({ tripId }: SpendingFeedProps) {
                     className="w-10 h-10 rounded-lg flex items-center justify-center text-sm font-bold text-white flex-shrink-0"
                     style={{ backgroundColor: config.bg, opacity: 0.8 }}
                   >
-                    {CATEGORY_EMOJI[cat] || "?"}
+                    {CATEGORY_CONFIG[cat]?.label || "?"}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">
                       {spend.description || "Payment"}
                     </p>
-                    <p className="text-xs text-[var(--text-secondary)]">
+                    <p className="text-xs text-[var(--text-secondary)] flex items-center gap-1">
                       <span className="capitalize">{cat}</span>
+                      {NANOPAYMENT_CATEGORIES.has(cat) && (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-[#06b6d4]/10 text-[#06b6d4]">
+                          nanopayment
+                        </span>
+                      )}
                       {" / "}
                       <span className="font-mono">
                         {spend.recipient

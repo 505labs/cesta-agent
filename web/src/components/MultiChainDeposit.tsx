@@ -2,14 +2,15 @@
 
 import { useAccount, useSwitchChain } from "wagmi";
 import { sepolia, baseSepolia } from "viem/chains";
-import { anvilLocal } from "@/lib/wagmi";
+import { anvilLocal, arcTestnet } from "@/lib/wagmi";
 import { useState } from "react";
 import { useDeposit } from "@/lib/treasury";
 
 const CHAINS = [
-  { chain: anvilLocal, name: "Anvil Local", color: "var(--accent-blue)" },
-  { chain: sepolia, name: "Sepolia", color: "var(--accent-purple)" },
-  { chain: baseSepolia, name: "Base Sepolia", color: "var(--accent-green)" },
+  { chain: arcTestnet, name: "Arc Testnet", color: "#06b6d4", primary: true },
+  { chain: anvilLocal, name: "Anvil Local", color: "var(--accent-blue)", primary: false },
+  { chain: sepolia, name: "Sepolia", color: "var(--accent-purple)", primary: false },
+  { chain: baseSepolia, name: "Base Sepolia", color: "var(--accent-green)", primary: false },
 ];
 
 interface MultiChainDepositProps {
@@ -66,7 +67,7 @@ export default function MultiChainDeposit({ tripId }: MultiChainDepositProps) {
       />
 
       <div className="space-y-2">
-        {CHAINS.map(({ chain, name, color }) => (
+        {CHAINS.map(({ chain, name, color, primary }) => (
           <button
             key={chain.id}
             onClick={() => handleDeposit(chain.id)}
@@ -79,6 +80,11 @@ export default function MultiChainDeposit({ tripId }: MultiChainDepositProps) {
                 style={{ backgroundColor: color }}
               />
               <span className="text-sm font-medium">{name}</span>
+              {primary && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#06b6d4]/10 text-[#06b6d4] font-medium">
+                  USDC native
+                </span>
+              )}
               {chainId === chain.id && (
                 <span className="text-xs px-1.5 py-0.5 rounded bg-[var(--accent-green)]/10 text-[var(--accent-green)]">
                   connected

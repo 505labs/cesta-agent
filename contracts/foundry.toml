@@ -5,9 +5,10 @@ libs = ["lib"]
 solc = "0.8.24"
 
 [rpc_endpoints]
-arc_testnet = "${ARC_TESTNET_RPC_URL}"
+arc_testnet = "https://rpc.testnet.arc.network"
 local = "http://127.0.0.1:8545"
 og_testnet = "https://evmrpc-testnet.0g.ai"
 
 [etherscan]
 og_testnet = { key = "${ETHERSCAN_API_KEY}", chain = 16602, url = "https://chainscan-galileo.0g.ai/open/api" }
+arc_testnet = { key = "unused", chain = 5042002, url = "https://testnet.arcscan.app/api" }

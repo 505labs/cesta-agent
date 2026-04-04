@@ -98,6 +98,42 @@ export function useNextTripId() {
   });
 }
 
+export function useCategoryBudget(tripId: bigint, category: string) {
+  return useReadContract({
+    address: TREASURY_ADDRESS,
+    abi: GroupTreasuryABI,
+    functionName: "getCategoryBudget",
+    args: [tripId, category],
+  });
+}
+
+export function useDailySpending(tripId: bigint) {
+  return useReadContract({
+    address: TREASURY_ADDRESS,
+    abi: GroupTreasuryABI,
+    functionName: "getDailySpending",
+    args: [tripId],
+  });
+}
+
+export function useNanopaymentTotal(tripId: bigint) {
+  return useReadContract({
+    address: TREASURY_ADDRESS,
+    abi: GroupTreasuryABI,
+    functionName: "getNanopaymentTotal",
+    args: [tripId],
+  });
+}
+
+export function useVoteRequest(voteId: bigint) {
+  return useReadContract({
+    address: TREASURY_ADDRESS,
+    abi: GroupTreasuryABI,
+    functionName: "getVoteRequest",
+    args: [voteId],
+  });
+}
+
 export function useUsdcBalance(address: Address | undefined) {
   return useReadContract({
     address: USDC_ADDRESS,

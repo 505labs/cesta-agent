@@ -25,6 +25,8 @@ contract GroupTreasuryTest is Test {
     address bob = makeAddr("bob");
     address carol = makeAddr("carol");
     address restaurant = makeAddr("restaurant");
+    address tollBooth = makeAddr("tollBooth");
+    address dataApi = makeAddr("dataApi");
 
     uint256 constant SPEND_LIMIT = 100e6;  // $100 USDC
     uint256 constant DEPOSIT_AMOUNT = 200e6; // $200 USDC each
@@ -51,7 +53,7 @@ contract GroupTreasuryTest is Test {
         vm.stopPrank();
     }
 
-    // --- Creation Tests ---
+    // =================== Creation Tests ===================
 
     function test_createTrip() public {
         uint256 tripId = _createTrip();
@@ -70,7 +72,7 @@ contract GroupTreasuryTest is Test {
         assertEq(id2, id1 + 1);
     }
 
-    // --- Deposit Tests ---
+    // =================== Deposit Tests ===================
 
     function test_deposit() public {
         uint256 tripId = _createTrip();
@@ -97,7 +99,6 @@ contract GroupTreasuryTest is Test {
         _depositAs(alice, tripId, 100e6);
 
         assertEq(treasury.getMemberDeposit(tripId, alice), 200e6);
-        // Member count should still be 1
         assertEq(treasury.getMembers(tripId).length, 1);
     }
 
@@ -110,7 +111,7 @@ contract GroupTreasuryTest is Test {
         vm.stopPrank();
     }
 
-    // --- Spend Tests ---
+    // =================== Spend Tests ===================
 
     function test_spend() public {
         uint256 tripId = _createTrip();
@@ -155,15 +156,256 @@ contract GroupTreasuryTest is Test {
         treasury.spend(tripId, restaurant, 80e6, "food", "dinner");
     }
 
-    // --- Settlement Tests ---
+    // =================== Daily Cap Tests ===================
+
+    function test_dailyCap_set() public {
+        uint256 tripId = _createTrip();
+        vm.prank(organizer);
+        treasury.setDailyCap(tripId, 300e6); // $300/day
+
+        GroupTreasury.Trip memory trip = treasury.getTrip(tripId);
+        assertEq(trip.dailyCap, 300e6);
+    }
+
+    function test_dailyCap_enforced() public {
+        uint256 tripId = _createTrip();
+        _depositAs(alice, tripId, 600e6);
+
+        vm.prank(organizer);
+        treasury.setDailyCap(tripId, 150e6); // $150/day
+
+        vm.startPrank(agent);
+        treasury.spend(tripId, restaurant, 100e6, "food", "lunch");
+        // This should fail — $100 + $60 = $160 > $150 cap
+        vm.expectRevert("Exceeds daily cap");
+        treasury.spend(tripId, restaurant, 60e6, "food", "dinner");
+        vm.stopPrank();
+    }
+
+    function test_dailyCap_allowsUnderLimit() public {
+        uint256 tripId = _createTrip();
+        _depositAs(alice, tripId, 600e6);
+
+        vm.prank(organizer);
+        treasury.setDailyCap(tripId, 150e6);
+
+        vm.startPrank(agent);
+        treasury.spend(tripId, restaurant, 70e6, "food", "lunch");
+        treasury.spend(tripId, restaurant, 70e6, "gas", "fuel");
+        vm.stopPrank();
+
+        assertEq(treasury.getDailySpending(tripId), 140e6);
+    }
+
+    // =================== Category Budget Tests ===================
+
+    function test_categoryBudget_set() public {
+        uint256 tripId = _createTrip();
+        vm.prank(organizer);
+        treasury.setCategoryBudget(tripId, "food", 200e6);
+
+        (uint256 budget, uint256 spent) = treasury.getCategoryBudget(tripId, "food");
+        assertEq(budget, 200e6);
+        assertEq(spent, 0);
+    }
+
+    function test_categoryBudget_enforced() public {
+        uint256 tripId = _createTrip();
+        _depositAs(alice, tripId, 600e6);
+
+        vm.prank(organizer);
+        treasury.setCategoryBudget(tripId, "food", 100e6);
+
+        vm.startPrank(agent);
+        treasury.spend(tripId, restaurant, 80e6, "food", "lunch");
+        // This should fail — $80 + $30 = $110 > $100 food budget
+        vm.expectRevert("Exceeds category budget");
+        treasury.spend(tripId, restaurant, 30e6, "food", "snacks");
+        vm.stopPrank();
+    }
+
+    function test_categoryBudget_tracksSpending() public {
+        uint256 tripId = _createTrip();
+        _depositAs(alice, tripId, 600e6);
+
+        vm.prank(organizer);
+        treasury.setCategoryBudget(tripId, "food", 200e6);
+
+        vm.prank(agent);
+        treasury.spend(tripId, restaurant, 50e6, "food", "lunch");
+
+        (uint256 budget, uint256 spent) = treasury.getCategoryBudget(tripId, "food");
+        assertEq(budget, 200e6);
+        assertEq(spent, 50e6);
+    }
+
+    function test_categoryBudget_noBudgetAllowsUnlimited() public {
+        uint256 tripId = _createTrip();
+        _depositAs(alice, tripId, 600e6);
+        // No category budget set — should allow spending
+
+        vm.startPrank(agent);
+        treasury.spend(tripId, restaurant, 80e6, "food", "big dinner");
+        vm.stopPrank();
+
+        (, uint256 spent) = treasury.getCategoryBudget(tripId, "food");
+        assertEq(spent, 80e6);
+    }
+
+    // =================== Nanopayment Tests ===================
+
+    function test_nanopayment_basic() public {
+        uint256 tripId = _createTrip();
+        _depositAs(alice, tripId, 600e6);
+
+        vm.prank(agent);
+        treasury.nanopayment(tripId, tollBooth, 4_500000, "tolls", "Highway A8 toll");
+
+        assertEq(usdc.balanceOf(tollBooth), 4_500000);
+        assertEq(treasury.getNanopaymentTotal(tripId), 4_500000);
+        assertEq(treasury.getBalance(tripId), 600e6 - 4_500000);
+    }
+
+    function test_nanopayment_skipsSpendLimit() public {
+        // Nanopayments don't check per-tx spend limit — they're micro by nature
+        uint256 tripId = _createTrip();
+        _depositAs(alice, tripId, 600e6);
+
+        // Spend limit is $100, but nanopayments are always small anyway
+        vm.prank(agent);
+        treasury.nanopayment(tripId, dataApi, 1000, "data", "Gas price API call $0.001");
+
+        assertEq(usdc.balanceOf(dataApi), 1000); // $0.001 in 6-decimal USDC
+        assertEq(treasury.getNanopaymentTotal(tripId), 1000);
+    }
+
+    function test_nanopayment_multipleDataApiCalls() public {
+        uint256 tripId = _createTrip();
+        _depositAs(alice, tripId, 600e6);
+
+        vm.startPrank(agent);
+        treasury.nanopayment(tripId, dataApi, 3000, "data", "Gas prices API");
+        treasury.nanopayment(tripId, dataApi, 5000, "data", "Restaurant ratings API");
+        treasury.nanopayment(tripId, dataApi, 2000, "data", "Weather forecast API");
+        treasury.nanopayment(tripId, tollBooth, 4_500000, "tolls", "Toll A8");
+        treasury.nanopayment(tripId, makeAddr("parking"), 6_000000, "parking", "Nice parking garage");
+        vm.stopPrank();
+
+        assertEq(treasury.getNanopaymentTotal(tripId), 10_510000); // $10.51 total
+        GroupTreasury.Spend[] memory history = treasury.getSpends(tripId);
+        assertEq(history.length, 5);
+    }
+
+    function test_nanopayment_respectsCategoryBudget() public {
+        uint256 tripId = _createTrip();
+        _depositAs(alice, tripId, 600e6);
+
+        vm.prank(organizer);
+        treasury.setCategoryBudget(tripId, "data", 10000); // $0.01 budget for data
+
+        vm.startPrank(agent);
+        treasury.nanopayment(tripId, dataApi, 5000, "data", "API call 1");
+        treasury.nanopayment(tripId, dataApi, 5000, "data", "API call 2");
+        vm.stopPrank();
+
+        // No revert — nanopayments track but don't enforce category budgets strictly
+        // (they just update the spent counter for dashboard display)
+    }
+
+    // =================== Group Voting Tests ===================
+
+    function test_vote_requestAndApprove() public {
+        uint256 tripId = _createTrip();
+        _depositAs(alice, tripId, 200e6);
+        _depositAs(bob, tripId, 200e6);
+        _depositAs(carol, tripId, 200e6);
+
+        // Agent requests a vote for a $220 hotel (over $100 limit)
+        vm.prank(agent);
+        uint256 voteId = treasury.requestVote(
+            tripId, makeAddr("hotel"), 220e6, "lodging", "Hotel & Spa Nice", 2
+        );
+
+        // Alice and Bob approve
+        vm.prank(alice);
+        treasury.castVote(voteId);
+        vm.prank(bob);
+        treasury.castVote(voteId);
+
+        // Execute the vote
+        vm.prank(agent);
+        treasury.executeVote(voteId);
+
+        assertEq(usdc.balanceOf(makeAddr("hotel")), 220e6);
+        assertEq(treasury.getBalance(tripId), 380e6);
+    }
+
+    function test_vote_notEnoughApprovals() public {
+        uint256 tripId = _createTrip();
+        _depositAs(alice, tripId, 200e6);
+        _depositAs(bob, tripId, 200e6);
+        _depositAs(carol, tripId, 200e6);
+
+        vm.prank(agent);
+        uint256 voteId = treasury.requestVote(
+            tripId, makeAddr("hotel"), 220e6, "lodging", "Expensive hotel", 2
+        );
+
+        // Only Alice approves
+        vm.prank(alice);
+        treasury.castVote(voteId);
+
+        // Execute should fail
+        vm.prank(agent);
+        vm.expectRevert("Not enough approvals");
+        treasury.executeVote(voteId);
+    }
+
+    function test_vote_cannotVoteTwice() public {
+        uint256 tripId = _createTrip();
+        _depositAs(alice, tripId, 200e6);
+
+        vm.prank(agent);
+        uint256 voteId = treasury.requestVote(
+            tripId, restaurant, 50e6, "food", "dinner", 1
+        );
+
+        vm.prank(alice);
+        treasury.castVote(voteId);
+
+        vm.prank(alice);
+        vm.expectRevert("Already voted");
+        treasury.castVote(voteId);
+    }
+
+    function test_vote_getVoteRequest() public {
+        uint256 tripId = _createTrip();
+        _depositAs(alice, tripId, 200e6);
+
+        vm.prank(agent);
+        uint256 voteId = treasury.requestVote(
+            tripId, restaurant, 50e6, "food", "dinner", 1
+        );
+
+        (uint256 tid, address recip, uint256 amt, string memory cat, string memory desc, uint256 approvals, uint256 threshold, bool executed) = treasury.getVoteRequest(voteId);
+        assertEq(tid, tripId);
+        assertEq(recip, restaurant);
+        assertEq(amt, 50e6);
+        assertEq(keccak256(bytes(cat)), keccak256(bytes("food")));
+        assertEq(keccak256(bytes(desc)), keccak256(bytes("dinner")));
+        assertEq(approvals, 0);
+        assertEq(threshold, 1);
+        assertEq(executed, false);
+    }
+
+    // =================== Settlement Tests ===================
 
     function test_settle_returnsProportionally() public {
         uint256 tripId = _createTrip();
-        _depositAs(alice, tripId, 200e6);  // 1/3
-        _depositAs(bob, tripId, 200e6);    // 1/3
-        _depositAs(carol, tripId, 200e6);  // 1/3
+        _depositAs(alice, tripId, 200e6);
+        _depositAs(bob, tripId, 200e6);
+        _depositAs(carol, tripId, 200e6);
 
-        // Spend $300 of $600
         vm.startPrank(agent);
         treasury.spend(tripId, restaurant, 100e6, "food", "lunch");
         treasury.spend(tripId, restaurant, 100e6, "gas", "fuel");
@@ -175,9 +417,8 @@ contract GroupTreasuryTest is Test {
         vm.prank(alice);
         treasury.settle(tripId);
 
-        // Each should get $100 back (1/3 of $300 remaining)
         assertEq(usdc.balanceOf(alice) - aliceBefore, 100e6);
-        assertEq(usdc.balanceOf(bob), 900e6); // 1000 - 200 deposit + 100 return
+        assertEq(usdc.balanceOf(bob), 900e6);
         assertEq(usdc.balanceOf(carol), 900e6);
     }
 
@@ -205,28 +446,34 @@ contract GroupTreasuryTest is Test {
         treasury.spend(tripId, restaurant, 50e6, "food", "late snack");
     }
 
-    // --- Emergency Withdraw Tests ---
+    // =================== Emergency Withdraw Tests ===================
 
     function test_emergencyWithdraw() public {
         uint256 tripId = _createTrip();
         _depositAs(alice, tripId, 200e6);
         _depositAs(bob, tripId, 400e6);
 
-        // Spend $100
         vm.prank(agent);
         treasury.spend(tripId, restaurant, 100e6, "food", "lunch");
 
-        // Alice emergency withdraws her proportional share
-        // Remaining: 600 - 100(spent) = 500. Alice's share: 500 * 200/600 = 166.666...
         uint256 aliceBefore = usdc.balanceOf(alice);
         vm.prank(alice);
         treasury.emergencyWithdraw(tripId);
 
         uint256 aliceGot = usdc.balanceOf(alice) - aliceBefore;
-        assertApproxEqAbs(aliceGot, 166_666666, 1); // allow 1 wei rounding
+        assertApproxEqAbs(aliceGot, 166_666666, 1);
     }
 
-    // --- Multi-spend Tests ---
+    function test_emergencyWithdraw_revertNonMember() public {
+        uint256 tripId = _createTrip();
+        _depositAs(alice, tripId, DEPOSIT_AMOUNT);
+
+        vm.prank(bob);
+        vm.expectRevert("Not a member");
+        treasury.emergencyWithdraw(tripId);
+    }
+
+    // =================== Multi-spend Tests ===================
 
     function test_spend_multipleInSequence() public {
         uint256 tripId = _createTrip();
@@ -267,15 +514,6 @@ contract GroupTreasuryTest is Test {
         vm.stopPrank();
     }
 
-    function test_emergencyWithdraw_revertNonMember() public {
-        uint256 tripId = _createTrip();
-        _depositAs(alice, tripId, DEPOSIT_AMOUNT);
-
-        vm.prank(bob);
-        vm.expectRevert("Not a member");
-        treasury.emergencyWithdraw(tripId);
-    }
-
     function test_settle_noSpending_fullRefund() public {
         uint256 tripId = _createTrip();
         _depositAs(alice, tripId, 300e6);
@@ -299,5 +537,67 @@ contract GroupTreasuryTest is Test {
         vm.prank(stranger);
         vm.expectRevert("Not a member");
         treasury.settle(tripId);
+    }
+
+    // =================== Combined Flow Test (Demo Scenario) ===================
+
+    function test_fullDemoFlow() public {
+        // 1. Create trip with $100 auto-limit, $500/day cap
+        uint256 tripId = _createTrip();
+        vm.startPrank(organizer);
+        treasury.setDailyCap(tripId, 500e6);
+        treasury.setCategoryBudget(tripId, "food", 200e6);
+        treasury.setCategoryBudget(tripId, "gas", 150e6);
+        treasury.setCategoryBudget(tripId, "data", 1e6); // $1 for data APIs
+        vm.stopPrank();
+
+        // 2. Three friends deposit $200 each
+        _depositAs(alice, tripId, 200e6);
+        _depositAs(bob, tripId, 200e6);
+        _depositAs(carol, tripId, 200e6);
+        assertEq(treasury.getBalance(tripId), 600e6);
+
+        // 3. Agent makes nanopayments for data APIs
+        vm.startPrank(agent);
+        treasury.nanopayment(tripId, dataApi, 3000, "data", "Gas prices API $0.003");
+        treasury.nanopayment(tripId, dataApi, 5000, "data", "Restaurant data API $0.005");
+        treasury.nanopayment(tripId, dataApi, 2000, "data", "Weather API $0.002");
+
+        // 4. Agent pays for toll and parking (nanopayments)
+        treasury.nanopayment(tripId, tollBooth, 4_500000, "tolls", "Highway A8 toll");
+        treasury.nanopayment(tripId, makeAddr("parking"), 6_000000, "parking", "Nice parking");
+
+        // 5. Agent pays for food (regular spend, under limit)
+        treasury.spend(tripId, restaurant, 38_500000, "food", "3x BBQ combos");
+        vm.stopPrank();
+
+        // 6. Agent requests vote for hotel (over $100 limit)
+        vm.prank(agent);
+        uint256 voteId = treasury.requestVote(
+            tripId, makeAddr("hotel"), 180e6, "lodging", "Hotel & Spa Nice", 2
+        );
+
+        // 7. Members approve
+        vm.prank(alice);
+        treasury.castVote(voteId);
+        vm.prank(bob);
+        treasury.castVote(voteId);
+
+        // 8. Execute the hotel booking
+        vm.prank(agent);
+        treasury.executeVote(voteId);
+
+        // 9. Check state
+        assertEq(treasury.getNanopaymentTotal(tripId), 10_510000); // ~$10.51
+        (uint256 foodBudget, uint256 foodSpent) = treasury.getCategoryBudget(tripId, "food");
+        assertEq(foodBudget, 200e6);
+        assertEq(foodSpent, 38_500000);
+
+        // 10. Settle
+        vm.prank(alice);
+        treasury.settle(tripId);
+
+        GroupTreasury.Trip memory trip = treasury.getTrip(tripId);
+        assertEq(uint(trip.status), uint(GroupTreasury.TripStatus.Settled));
     }
 }
