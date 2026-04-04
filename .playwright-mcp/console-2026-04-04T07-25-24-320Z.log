@@ -1,0 +1,29 @@
+[     306ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:3000/:0
+[     525ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js:24650
+[    1303ms] [WARNING] Missing NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID — WalletConnect will not work @ webpack-internal:///(app-pages-browser)/./src/lib/wagmi.ts:40
+[    1413ms] [ERROR] No project ID is configured. You can create and configure a project ID at https://dashboard.reown.com. {code: APKT008} @ webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/components/globals/intercept-console-error.js:50
+[    1416ms] [ERROR] No project ID is configured. You can create and configure a project ID at https://dashboard.reown.com. {code: APKT008} @ webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/components/globals/intercept-console-error.js:50
+[    1477ms] [WARNING] ./node_modules/@wagmi/connectors/dist/esm/baseAccount.js
+Module not found: Can't resolve '@base-org/account' in '/Users/snojj25/Desktop/505/hackhatons/cannes/ethglobal/web/node_modules/@wagmi/connectors/dist/esm' @ webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/components/react-dev-overlay/app/hot-reloader-client.js:281
+[    1477ms] [WARNING] ./node_modules/@wagmi/connectors/dist/esm/metaMask.js
+Module not found: Can't resolve '@metamask/connect-evm' in '/Users/snojj25/Desktop/505/hackhatons/cannes/ethglobal/web/node_modules/@wagmi/connectors/dist/esm' @ webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/components/react-dev-overlay/app/hot-reloader-client.js:281
+[    1533ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:3000/favicon.ico:0
+[    1542ms] [ERROR] Failed to load resource: the server responded with a status of 403 () @ https://api.web3modal.org/appkit/v1/config?st=appkit&sv=react-wagmi%2Csolana-1.8.19:0
+[    1542ms] [WARNING] [Reown Config] Failed to fetch remote project configuration. Using local/default values. Error: HTTP status code: 403
+    at fetchData (webpack-internal:///(app-pages-browser)/./node_modules/@reown/appkit-controllers/dist/esm/src/utils/FetchUtil.js:9:21)
+    at async FetchUtil.get (webpack-internal:///(app-pages-browser)/./node_modules/@reown/appkit-controllers/dist/esm/src/utils/FetchUtil.js:24:26)
+    at async Object.fetchProjectConfig (webpack-internal:///(app-pages-browser)/./node_modules/@reown/appkit-controllers/dist/esm/src/controllers/ApiController.js:127:26)
+    at async Object.fetchRemoteFeatures (webpack-internal:///(app-pages-browser)/./node_modules/@reown/appkit/dist/esm/src/utils/ConfigUtil.js:253:32)
+    at async AppKit.initialize (webpack-internal:///(app-pages-browser)/./node_modules/@reown/appkit/dist/esm/src/client/appkit-base-client.js:270:35)
+    at async AppKit.initialize (webpack-internal:///(app-pages-browser)/./node_modules/@reown/appkit/dist/esm/src/client/appkit.js:443:9) @ webpack-internal:///(app-pages-browser)/./node_modules/@reown/appkit/dist/esm/src/utils/ConfigUtil.js:256
+[    1555ms] [ERROR] Failed to load resource: the server responded with a status of 403 () @ https://api.web3modal.org/appkit/v1/project-limits?st=appkit&sv=react-wagmi%2Csolana-1.8.19:0
+[    1555ms] [WARNING] Failed to fetch usage Error: HTTP status code: 403
+    at fetchData (webpack-internal:///(app-pages-browser)/./node_modules/@reown/appkit-controllers/dist/esm/src/utils/FetchUtil.js:9:21)
+    at async FetchUtil.get (webpack-internal:///(app-pages-browser)/./node_modules/@reown/appkit-controllers/dist/esm/src/utils/FetchUtil.js:24:26)
+    at async Object.fetchUsage (webpack-internal:///(app-pages-browser)/./node_modules/@reown/appkit-controllers/dist/esm/src/controllers/ApiController.js:135:30)
+    at async AppKit.initialize (webpack-internal:///(app-pages-browser)/./node_modules/@reown/appkit/dist/esm/src/client/appkit-base-client.js:272:9)
+    at async AppKit.initialize (webpack-internal:///(app-pages-browser)/./node_modules/@reown/appkit/dist/esm/src/client/appkit.js:443:9) @ webpack-internal:///(app-pages-browser)/./node_modules/@reown/appkit-controllers/dist/esm/src/controllers/ApiController.js:151
+[    1569ms] [ERROR] Failed to load resource: the server responded with a status of 403 () @ https://api.web3modal.org/projects/v1/origins?st=appkit&sv=react-wagmi%2Csolana-1.8.19:0
+[    5319ms] [WARNING] The resource https://fonts.reown.com/KHTeka-Medium.woff2 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ http://localhost:3000/:0
+[   11562ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://pulse.walletconnect.org/batch?st=appkit&sv=react-wagmi%2Csolana-1.8.19:0
+[   14562ms] [WARNING] The resource https://fonts.reown.com/KHTeka-Medium.woff2 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ http://localhost:3000/:0
