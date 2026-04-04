@@ -1,6 +1,23 @@
+# Dependencies
+node_modules/
+
+# Env / secrets
+.env
+.env.local
+.circle-recovery/
+
+# Foundry
 contracts/lib/
 contracts/out/
 contracts/cache/
-node_modules/
-.env
-.env.local
+contracts/broadcast/
+
+# Next.js
+web/.next/
+web/test-results/
+
+# Bun lockfiles (per-package)
+mcp-servers/*/bun.lock
+
+# OS
+.DS_Store
