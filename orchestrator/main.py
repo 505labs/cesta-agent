@@ -24,6 +24,7 @@ from fastapi.responses import JSONResponse
 from auth import generate_nonce, verify_siwe, create_session, get_wallet_from_request
 from db import init_db, get_or_create_user, log_conversation
 from trips import router as trips_router
+from sessions import router as sessions_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -40,6 +41,9 @@ app.add_middleware(
 
 # Mount trip routes
 app.include_router(trips_router)
+
+# Mount session management routes
+app.include_router(sessions_router)
 
 # --- Config ---
 # Core VM proxy (routes to voice VM internally)

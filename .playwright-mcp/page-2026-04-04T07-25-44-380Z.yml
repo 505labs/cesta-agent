@@ -1,9 +1,0 @@
-- generic [active] [ref=e1]:
-  - generic [ref=e2]:
-    - heading "Connect your wallet" [level=2] [ref=e3]
-    - paragraph [ref=e4]: You need to connect a wallet to view this trip.
-    - generic [ref=e7]:
-      - text: Connect Wallet
-      - button "Connect Wallet" [ref=e8] [cursor=pointer]:
-        - generic [ref=e10]: Connect Wallet
-  - alert [ref=e11]

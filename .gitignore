@@ -1,6 +1,11 @@
 # Dependencies
 node_modules/
 
+# Python
+venv/
+__pycache__/
+*.pyc
+
 # Env / secrets
 .env
 .env.local
@@ -11,13 +16,23 @@ contracts/lib/
 contracts/out/
 contracts/cache/
 contracts/broadcast/
+contracts/anvil-state.json
 
 # Next.js
 web/.next/
 web/test-results/
+
+# Playwright MCP artifacts
+.playwright-mcp/
 
 # Bun lockfiles (per-package)
 mcp-servers/*/bun.lock
 
 # OS
 .DS_Store
+
+# Claude
+.claude/
+
+# Agent runtime state
+agent/memory/
