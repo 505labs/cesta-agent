@@ -10,22 +10,20 @@
 
 A road trip involves paying gas stations, restaurants, hotels, toll booths, and parking garages. **None of these accept crypto.** They accept Visa and Mastercard.
 
-- **WalletConnect Pay** requires merchants to integrate WC Pay QR codes. It's a PSP-level integration. Gas stations don't have it. Restaurants don't have it. The Ingenico terminal partnership is nascent.
-- **x402/Nanopayments** is for machine-to-machine API payments. You can't pay for a burger with an HTTP 402 header.
-- **Direct USDC transfer** requires the merchant to have a USDC wallet. They don't.
+- **x402/Nanopayments** is for machine-to-machine API payments and gas-free micro-transactions. Perfect for agent-to-service payments.
+- **Direct USDC transfer on Arc** works for any recipient with a USDC wallet. Sub-second finality, near-zero gas.
+- **Physical merchants** don't accept crypto. For real-world POS, the bridge is a virtual card (TODO: Stripe-like spend tokens, Slash MCP, or similar). The agent creates a disposable Visa/Mastercard funded from the USDC treasury. The user taps at a POS terminal. The merchant gets fiat.
 
-**The bridge is a virtual card.** The agent creates a disposable Visa/Mastercard funded from the USDC treasury. The user taps at a POS terminal. The merchant gets fiat. They never know crypto was involved.
-
-This reframes the entire architecture around **who initiates the payment**:
+**All payments flow through Arc:**
 
 | Direction | Technology | Who Initiates | What Happens |
 |-----------|-----------|---------------|--------------|
-| **Money IN** (user → car wallet) | WalletConnect (Reown AppKit) | Human | User connects wallet, deposits USDC — funding the car's wallet |
+| **Money IN** (user → car wallet) | Reown AppKit + Arc | Human | User connects wallet, deposits USDC into Arc treasury |
 | **Money MANAGED** (treasury rules) | Arc (GroupTreasury.sol) | Smart contract | Enforces budgets, caps, voting, receipts |
 | **Money OUT — autonomous** (parking, tolls, fares) | Arc Nanopayments | Agent (no human) | Agent streams gas-free payments for pre-approved categories |
-| **Money OUT — approved** (hotel, big meals) | WalletConnect Pay | Human approves | Group votes via WC, then agent executes |
+| **Money OUT — approved** (hotel, big meals) | Arc (treasury contract) | Agent after in-app approval | Members tap approve in app, then agent executes on Arc |
 | **Money THINKS** (agent buys data) | Arc x402/Nanopayments | Agent (no human) | Agent pays per-API-call for intelligence |
-| **Money OUT — real world** (physical POS) | Virtual Card (Visa/MC) | Agent creates, human taps | Agent funds disposable card, user taps at merchant |
+| **Money OUT — real world** (physical POS) | Virtual Card (TODO) | Agent creates, human taps | Agent funds disposable card from treasury, user taps at merchant |
 
 ---
 
@@ -59,12 +57,10 @@ Carol opens web app
 ```
 
 **Who does what:**
-- **WalletConnect (Reown AppKit):** Wallet connection modal, multi-chain support (EVM + Solana), SIWE auth, "Pay with Exchange" for Coinbase/Binance users, in-app swaps if user has non-USDC tokens
+- **Reown AppKit (infra):** Wallet connection modal, multi-chain support (EVM + Solana), SIWE auth
 - **Arc (CCTP V2 + Hooks):** Cross-chain bridging, auto-deposit into treasury contract
 - **Arc (GroupTreasury.sol):** Records deposit, updates balances, emits events
 - **Arc (Circle Paymaster):** Sponsors gas so user's full $200 goes into treasury
-
-**WalletConnect depth here:** This isn't just a "Connect Wallet" button. It's multi-chain wallet detection, exchange account funding, token swaps, and gasless onboarding — the full AppKit feature stack.
 
 ---
 
@@ -196,10 +192,10 @@ Agent: "Booked! Hotel & Spa Nice, check-in after 3pm.
 ```
 
 **Who does what:**
-- **Virtual Card Issuer:** Creates card for online booking, handles the charge.
+- **Virtual Card Issuer (TODO):** Creates card for online booking, handles the charge.
 - **Arc (GroupTreasury.sol):** Group voting mechanism, budget tracking, receipt emission.
 - **Arc (x402):** If the agent needs to check hotel availability via a paid API, nanopayments cover it.
-- **WalletConnect (AppKit):** The approval notification UX — members vote via the web app where they're authenticated by their connected wallet. Smart Sessions define what amount triggers a vote vs auto-approve.
+- **In-app approval:** Members tap "Approve" in the web app (authenticated via Reown AppKit wallet). Backend records votes; once threshold met, agent executes spend on Arc.
 
 ---
 
@@ -244,13 +240,9 @@ Both approaches:
 ┌─────────────────────────────────────────────────────────────────┐
 │  MONEY IN — How funds enter the treasury                         │
 │                                                                   │
-│  WalletConnect (Reown AppKit):                                   │
+│  Reown AppKit (wallet connection infra):                         │
 │    • Wallet connection (multi-chain: EVM + Solana)               │
 │    • SIWE authentication (wallet = identity)                     │
-│    • Pay with Exchange (Coinbase/Binance direct)                 │
-│    • In-app swaps (DAI→USDC, ETH→USDC)                         │
-│    • Smart Sessions: grant agent scoped permissions (ERC-7715)   │
-│    • Smart Accounts: gasless onboarding for new users            │
 │                                                                   │
 │  Arc (CCTP V2 + Gateway):                                        │
 │    • Cross-chain USDC bridging (any chain → Arc, 8-20s)         │
@@ -263,7 +255,7 @@ Both approaches:
 │  Arc (GroupTreasury.sol on Arc testnet):                         │
 │    • Per-tx caps, daily caps, category budgets                   │
 │    • Agent authorization (Circle Programmable Wallet = signer)   │
-│    • Group voting for over-limit spends                          │
+│    • In-app group voting for over-limit spends                   │
 │    • Proportional settlement at trip end                         │
 │    • On-chain receipt events for every spend                     │
 │    • ERC-8183 escrow pattern for trip lifecycle                  │
@@ -286,33 +278,30 @@ Both approaches:
 │    • MPC-secured agent signer for all autonomous actions         │
 │                                                                   │
 ├─────────────────────────────────────────────────────────────────┤
-│  MONEY OUT — How funds reach real-world merchants                 │
+│  MONEY OUT — How funds reach recipients                           │
 │                                                                   │
-│  Virtual Card Layer (Slash MCP / Crossmint / UQPAY FlashCard):  │
-│    • Agent creates disposable Visa/MC per purchase               │
-│    • Scoped: spending limit, MCC restriction, TTL                │
-│    • Funded from treasury USDC (issuer handles USDC→fiat)        │
-│    • User adds to Apple Pay / Google Pay → NFC tap at POS        │
-│    • Card invalidated after use                                  │
-│    • Merchant receives fiat through normal Visa/MC rails         │
-│    • Merchant never knows crypto was involved                    │
+│  Arc (direct on-chain):                                          │
+│    • Agent calls treasury.spend() for any payment                │
+│    • Under auto-limit: agent executes immediately                │
+│    • Over auto-limit: in-app approval first, then agent executes │
+│    • On-chain receipt with category, description, amount         │
 │                                                                   │
-│  WalletConnect Pay (secondary, crypto-native merchants only):    │
-│    • If a merchant has WC Pay terminal → QR/tap crypto payment   │
-│    • Ingenico partnership: future-facing, not widespread yet     │
-│    • Best for: crypto-native shops, hackathon demo scenarios     │
+│  Virtual Card Layer (TODO — Slash MCP / Stripe / similar):       │
+│    • For physical merchant POS (gas stations, restaurants)        │
+│    • Agent creates disposable Visa/MC funded from treasury       │
+│    • User taps at terminal, merchant gets fiat                   │
 │                                                                   │
-│  Direct USDC (rare):                                             │
-│    • If merchant accepts USDC → direct treasury transfer on Arc  │
+│  Direct USDC (crypto-native recipients):                         │
+│    • If recipient accepts USDC → direct treasury transfer on Arc │
 │    • On-chain receipt, no card intermediary needed                │
 │                                                                   │
 ├─────────────────────────────────────────────────────────────────┤
 │  APPROVAL & UX — How humans stay in control                       │
 │                                                                   │
-│  WalletConnect (Reown AppKit + Smart Sessions):                  │
+│  In-App Approval System:                                         │
 │    • Dashboard: real-time spending, budgets, category breakdowns │
-│    • Approval UX: vote on large purchases via connected wallet   │
-│    • Smart Sessions: define what agent can auto-approve           │
+│    • Approval UX: tap to approve large purchases in the web app  │
+│    • Spending limits: per-tx cap defines auto-approve boundary   │
 │    • Notifications: push alerts for votes, large spends          │
 │                                                                   │
 └─────────────────────────────────────────────────────────────────┘
@@ -320,49 +309,25 @@ Both approaches:
 
 ---
 
-## Are WalletConnect and Arc Complementary? (Revised Answer)
+## Simplified Payment Architecture
 
-**Yes — the split is clean and based on who initiates the payment.**
+**Arc is the single payment layer.** No dual payment rails, no split architecture.
 
-### WalletConnect = The Human UX Layer
+### How It Works
 
-WalletConnect handles every moment where a human needs to be involved:
+1. **Under auto-limit (agent just pays):** Agent calls `treasury.spend()` on Arc. For micro-transactions (parking, tolls, data APIs), uses nanopayments (gas-free, batched via Gateway). For medium transactions (gas fill-ups, restaurant bills), direct on-chain tx. Sub-second finality, ~$0.01 gas.
 
-1. **Funding the car's wallet** — The wallet connection experience IS how you deposit money. Multi-chain support means friends aren't excluded by chain. "Pay with Exchange" means the Coinbase-only friend can still join.
+2. **Over auto-limit (humans approve first):** Agent sends approval request → members tap "Approve" in the web app → backend records votes → once 2-of-3 met → agent calls `treasury.spend()` on Arc. Same settlement, just with a human gate.
 
-2. **Defining what the agent can auto-spend** — Smart Sessions (ERC-7715) let users set the rules: "spend up to $15 per transaction on parking and tolls, up to $500 per day total, for 3 days." This defines the boundary between WalletConnect territory (needs approval) and Arc nanopayments territory (auto-approved).
+3. **Data APIs (machine-to-machine):** Agent pays per-query via x402 protocol. Gas-free nanopayments from the treasury's "services" budget.
 
-3. **Approving big purchases** — When the agent wants to book a $220 hotel, the group votes via WalletConnect-connected wallets. This is the human approval UX.
+4. **Physical merchants (TODO):** Virtual card layer (Slash MCP, Stripe spend tokens, or similar) creates disposable Visa/MC funded from treasury USDC. User taps at POS. Merchant gets fiat. This is a future integration — not blocking the hackathon demo.
 
-4. **Dashboard UX** — Spending/budgeting interface where humans monitor what the car spent.
+### Why This Is Simpler
 
-### Arc Nanopayments = The Autonomous Agent Layer
-
-Arc handles everything the agent does without asking a human:
-
-1. **Pre-approved micro-spending** — Parking ($3-8), tolls ($4-6), fares ($5-10), small food ($8-15). The user said "parking and fares are fine" at trip setup → agent streams gas-free nanopayments for these. No wallet popup, no UX friction.
-2. **Data API payments** — Agent pays $0.001-$0.01 per API call for gas prices, weather, restaurant data via x402. The agent buys its own intelligence from the treasury.
-3. **Treasury as source of truth** — All spending rules, balances, receipts, and settlement logic live on-chain on Arc.
-4. **Agent identity** — ERC-8004 gives the agent verifiable on-chain identity and reputation.
-
-### The Virtual Card Layer (New)
-
-This is the missing piece that makes the whole thing work for real-world spending:
-
-1. **Agent creates disposable cards** programmatically via MCP or API.
-2. **Cards are scoped** — spending limit, merchant category, time-to-live. The agent can't overspend because the card won't authorize beyond its limit.
-3. **Cards are funded from treasury USDC** — the card issuer handles the USDC→fiat conversion.
-4. **User taps at any merchant** — Apple Pay / Google Pay NFC. Works everywhere Visa/MC is accepted.
-5. **Card is invalidated after use** — no reusable credentials, no fraud surface.
-
-### No Technology Contradicts Another
-
-| Concern | Resolution |
-|---------|------------|
-| "WC Pay and x402 both handle payments" | WC Pay = human checkout UX. x402 = machine API payments. Different actors, different amounts. |
-| "Circle Wallets and WC Agent SDK both sign for the agent" | Circle Wallets is the canonical signer (MPC security). WC Agent SDK is optional for cross-chain bridging where WC Pay is needed. |
-| "Virtual cards bypass both WC Pay and Arc" | No — the treasury on Arc is the source of funds. The card is just the off-ramp. Every card spend is a treasury deduction with on-chain receipts on Arc. |
-| "WC Pay isn't useful if merchants don't accept it" | WC Pay is the forward-looking play (Ingenico terminals rolling out). For the hackathon, demo a crypto-native merchant scenario. For real-world spending, cards. |
+- **One chain, one treasury, one payment flow.** No bridging between WC-supported chains and Arc.
+- **No competing SDKs.** Circle Programmable Wallets is the only signer. No WC Agent SDK confusion.
+- **The auto-limit boundary is enforced by the smart contract**, not by which SDK you happen to route through.
 
 ---
 
@@ -430,23 +395,33 @@ Ranked by hackathon feasibility:
 
 ---
 
-## Sponsor Prize Mapping (Updated)
+## Sponsor Prize Mapping
 
-### Arc ($9K across 2 relevant tracks)
+### Arc ($9K across 2 relevant tracks) — PRIMARY
 
 | Track | Prize | Priority | What We Show |
 |-------|-------|----------|-------------|
-| **Agentic Nanopayments** | **$6K** | **Primary** | **Agent streams autonomous gas-free payments for parking, tolls, fares + x402 data APIs. Clean split: human → WC, agent → Arc.** |
+| **Agentic Nanopayments** | **$6K** | **Primary** | **Agent streams autonomous gas-free payments for ALL trip expenses + x402 data APIs. Single payment layer.** |
 | Stablecoin Logic | $3K | Secondary | GroupTreasury: conditional escrow, budgets, voting, auto-settlement, on-chain receipts |
-| ~~Chain Abstracted~~ | ~~$3K~~ | Deprioritized | Overlaps with WalletConnect's cross-chain capabilities. Skip to keep the split clean. |
 
-### WalletConnect ($5K across 2 tracks)
+### 0G ($6K) — PRIMARY
 
 | Track | Prize | What We Show |
 |-------|-------|-------------|
-| Reown SDK | $1K | Multi-chain AppKit (EVM + Solana), Smart Sessions (define auto-spend rules), wallet-based auth |
-| **WC Pay** | **$4K** | **Human UX: deposit into car wallet, group approval for big spends, spending/budgeting dashboard** |
+| Best OpenClaw Agent | $6K | Claude Code as agent framework, 0G Storage for trip data persistence |
 
-### Virtual Card Layer (No direct sponsor prize, but strengthens all submissions)
+### Ledger ($6K) — STRETCH
 
-The card layer isn't a sponsor track, but it makes the demo real. Judges can see an actual NFC tap at a real terminal. That's more memorable than a testnet transaction hash.
+| Track | Prize | What We Show |
+|-------|-------|-------------|
+| AI Agents x Ledger | $6K | Hardware approval for high-value treasury spends (Ledger as trust layer) |
+
+### Reown SDK ($1K) — INCIDENTAL
+
+| Track | Prize | What We Show |
+|-------|-------|-------------|
+| Reown SDK | $1K | Wallet connection + SIWE auth (infrastructure, not a focus) |
+
+### Virtual Card Layer (TODO — no direct sponsor prize)
+
+Future integration for physical merchant POS. Not blocking the hackathon demo — the demo shows on-chain payments directly.

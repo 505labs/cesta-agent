@@ -1,12 +1,22 @@
-# WalletConnect Integration — Implementation Plan
+# Reown AppKit + Auth Integration — Implementation Plan
+
+> **Revised 2026-04-04:** WalletConnect Pay removed. This plan now covers Reown AppKit (wallet connection) + SIWE auth only. WC Pay tasks (payment creation, PaymentApproval component, PaymentQR component, walletconnect-pay.ts) are no longer needed. All payments go through Arc.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Integrate WalletConnect deeply across the RoadTrip Co-Pilot app to qualify for both WC bounty tracks: Best App Built with Reown SDK ($1K) and Best Use of WalletConnect Pay ($4K).
+**Goal:** Complete the Reown AppKit wallet connection + SIWE authentication flow. This is infrastructure for user identity and deposits — not a payment rail.
 
-**Architecture:** The frontend gets a complete SIWE auth flow connecting AppKit wallet connection to the backend session system, multi-chain support (EVM + Solana), and WalletConnect Pay for human-approved payment flows. A new `useAuth` context manages the wallet→sign→token lifecycle. The backend gets enhanced SIWE verification. The treasury dashboard gets payment status tracking powered by WC Pay.
+**Architecture:** The frontend gets a complete SIWE auth flow connecting AppKit wallet connection to the backend session system. A new `useAuth` context manages the wallet→sign→token lifecycle. The backend gets enhanced SIWE verification. Multi-chain support (EVM + Solana) is optional.
 
-**Tech Stack:** Next.js 15, Reown AppKit 1.6.8, wagmi v2, viem, @reown/appkit-adapter-solana, @walletconnect/pay, Foundry (Solidity tests), Playwright (E2E tests), Python FastAPI (orchestrator)
+**Tech Stack:** Next.js 15, Reown AppKit 1.6.8, wagmi v2, viem, Foundry (Solidity tests), Playwright (E2E tests), Python FastAPI (orchestrator)
+
+**Removed (no longer needed):**
+- `web/src/lib/walletconnect-pay.ts` — WC Pay SDK wrapper
+- `web/src/components/PaymentApproval.tsx` — WC Pay approval UI
+- `web/src/components/PaymentQR.tsx` — WC Pay QR codes
+- `@walletconnect/pay` npm package
+- All WC Pay backend endpoints (payment creation, approval, etc.)
+- WC Pay merchant dashboard / WCPay ID
 
 ---
 
@@ -17,14 +27,18 @@
 |------|---------------|
 | `web/src/context/AuthContext.tsx` | React context: SIWE sign flow, token storage, session management |
 | `web/src/lib/siwe.ts` | SIWE message construction and signing utilities |
-| `web/src/lib/walletconnect-pay.ts` | WalletConnect Pay SDK wrapper — payment creation, options, confirmation |
-| `web/src/components/PaymentApproval.tsx` | UI for approving/rejecting large spends via WC Pay |
-| `web/src/components/PaymentQR.tsx` | QR code display for tap-to-pay / scan-to-pay flows |
 | `web/src/components/MultiChainDeposit.tsx` | Deposit UI showing multi-chain wallet balances and cross-chain deposit |
 | `web/e2e/auth.spec.ts` | Playwright E2E: wallet connect + SIWE auth flow |
 | `web/e2e/trip.spec.ts` | Playwright E2E: trip creation + deposit + dashboard |
 | `web/playwright.config.ts` | Playwright configuration |
 | `contracts/test/GroupTreasury.extended.t.sol` | Additional Foundry tests for daily cap and category budgets |
+
+### Removed Files (WC Pay — no longer needed)
+| File | Reason |
+|------|--------|
+| ~~`web/src/lib/walletconnect-pay.ts`~~ | WC Pay removed — payments go through Arc |
+| ~~`web/src/components/PaymentApproval.tsx`~~ | Replaced by simple in-app tap-to-approve |
+| ~~`web/src/components/PaymentQR.tsx`~~ | WC Pay QR flows removed |
 
 ### Modified Files
 | File | Changes |
@@ -35,10 +49,10 @@
 | `web/src/app/page.tsx` | Use auth context for session-aware UI |
 | `web/src/app/trip/[id]/page.tsx` | Pass auth token to VoiceInterface and API calls |
 | `web/src/components/VoiceInterface.tsx` | Use auth context instead of prop-drilled token |
-| `web/src/components/TreasuryDashboard.tsx` | Add payment approval section + WC Pay status indicators |
+| `web/src/components/TreasuryDashboard.tsx` | Add in-app approval section for over-limit spends |
 | `web/src/components/CreateTrip.tsx` | Wire up backend trip creation with auth token |
-| `web/src/lib/api.ts` | Add auth endpoints (getNonce, verifySiwe) + payment endpoints |
-| `web/package.json` | Add @reown/appkit-adapter-solana, @walletconnect/pay, @solana/web3.js, playwright |
+| `web/src/lib/api.ts` | Add auth endpoints (getNonce, verifySiwe) |
+| `web/package.json` | Add playwright (WC Pay package removed) |
 | `orchestrator/auth.py` | Tighten SIWE parsing, add domain validation |
 
 ---

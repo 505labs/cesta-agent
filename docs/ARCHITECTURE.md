@@ -11,11 +11,12 @@ A voice-first AI road trip assistant with a shared crypto wallet. The system has
 5. **Smart Contracts** — GroupTreasury on Arc (USDC escrow, spending, settlement)
 6. **MCP Servers** — Custom tools that give the AI agent its capabilities
 
-### Sponsor Integration Split
+### Sponsor Integration
 
-The two payment sponsors have a clean boundary based on **who initiates the payment**:
-- **WalletConnect** = Human UX layer. Wallet connection, deposits into the car's wallet, approval for big spends (group voting). Everything a human touches.
-- **Arc nanopayments** = Autonomous agent layer. Parking, tolls, fares, data APIs. Gas-free micro-transactions the agent handles without human involvement.
+- **Arc** = The payment layer. ALL payments go through Arc — nanopayments (gas-free micro-transactions for parking, tolls, fares, data APIs) and direct on-chain treasury transactions (larger spends). The treasury contract on Arc is the single source of truth.
+- **0G** = Storage + compute layer. Trip data persistence via 0G Storage. Agent framework.
+- **Reown AppKit** = Wallet connection + auth infrastructure. Users connect wallets and authenticate via SIWE. Not a payment rail.
+- **Ledger** (stretch) = Hardware approval for high-value spends.
 
 ---
 

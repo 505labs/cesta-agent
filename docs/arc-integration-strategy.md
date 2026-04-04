@@ -324,20 +324,21 @@ This is especially important for the demo: judges shouldn't have to think about 
 
 ### Track 3: Best Agentic Economy with Nanopayments ($6K) — PRIMARY TARGET
 
-**This is our strongest track and the cleanest separation from WalletConnect.**
+**Arc is the single payment layer for the entire application.**
 
-**The narrative:** WalletConnect handles the human side (deposits, approvals). Arc nanopayments handle everything the agent does autonomously — parking, tolls, fares, and data APIs. These are gas-free micro-transactions that would be terrible UX if they required a wallet popup each time.
+**The narrative:** The AI agent is a first-class economic actor on Arc. It pays for everything — parking, tolls, fares, data APIs, restaurant bills, hotel bookings — all through Arc. Small stuff is automatic via nanopayments. Big stuff gets human approval in-app first, then executes on Arc.
 
 **What to highlight:**
 - Agent streams autonomous gas-free nanopayments for pre-approved spending: parking ($3-8), tolls ($4-6), fares ($5-10), small food orders ($8-15)
 - Agent uses x402/nanopayments to pay for real-time data APIs per-query: gas prices ($0.001), restaurant data ($0.005), weather ($0.002)
-- Every payment is an auditable on-chain expense (settled in batches via Gateway)
+- Larger payments (gas fill-ups, hotel bookings) go through the treasury contract directly on Arc
+- Every payment is an auditable on-chain expense — nanopayments batched via Gateway, larger txs settled individually
 - AI agent with ERC-8004 on-chain identity and reputation
 - Circle Programmable Wallets for MPC-secured agent key management
-- Clean split: human-initiated payments → WalletConnect, agent-initiated autonomous payments → Arc nanopayments
+- In-app approval for over-limit spends (tap to approve, then agent executes on Arc)
 - Full transparency: dashboard shows every cent the agent spent
 
-**The pitch:** "The car handles parking, tolls, and fares on its own — no apps, no tapping. The agent pays for its own intelligence per-query. WalletConnect is for when humans need to be involved. Arc nanopayments are for everything the car can handle alone."
+**The pitch:** "The car handles everything — parking, tolls, fares, gas, food, hotels — all on Arc. Small stuff is automatic. Big stuff, the group approves with a tap. Every cent is on-chain, auditable, and transparent."
 
 **Deliverables:** Deployed contracts, x402 integration working, agent identity registered, architecture diagram, GitHub repo, demo video.
 
@@ -357,76 +358,43 @@ This is especially important for the demo: judges shouldn't have to think about 
 
 ### Track 2: Best Chain Abstracted USDC Apps ($3K) — DEPRIORITIZED
 
-**This track overlaps with WalletConnect's cross-chain capabilities (auto-bridging in the Agent SDK). Submitting here risks muddying the clean WC/Arc split. Only submit if we have time and a clear differentiator.**
+**Possible stretch submission.** Friends deposit from any chain via CCTP V2 → Arc treasury. The UX is chain-abstracted (user doesn't know about Arc). Only submit if we have time to polish the cross-chain deposit flow.
 
 ---
 
-## How Arc and WalletConnect Coexist (Not Compete)
+## Arc as the Single Payment Layer (Revised 2026-04-04)
 
-A common concern: both Arc/Circle and WalletConnect seem to "handle payments." They are **complementary layers with a clean boundary** — the split is about **who initiates the payment**.
+**WalletConnect Pay has been removed.** Arc handles ALL payments — both autonomous agent transactions and human-approved larger spends. This eliminates the dual-chain problem (WC Pay didn't support Arc) and removes competing payment SDKs.
 
-### The Core Distinction: Who Initiates?
+### How Payments Work Now
 
-- **WalletConnect** = the **human UX layer**. Everything a human touches: connecting wallets, depositing USDC into the car's wallet, approving large spends (hotel bookings, big restaurant bills). WalletConnect Pay handles the approval UX for purchases that exceed the auto-spend limit.
-- **Arc nanopayments** = the **autonomous agent layer**. Everything the agent does without human involvement: paying tolls ($5), parking ($6), small fares ($8), API data calls ($0.003). These are gas-free streaming micro-transactions on Arc — no wallet popup, no human in the loop.
-
-**The rule is simple:** Human initiates → WalletConnect. Agent initiates autonomously → Arc nanopayments.
-
-### WalletConnect vs Arc Nanopayments — Different Actors, Different Amounts
-
-| | WalletConnect Pay | Arc Nanopayments (x402) |
+| Payment Type | Mechanism | Human Involvement |
 |---|---|---|
-| **Who initiates** | Human (wallet approval) | AI agent (automatic, no human) |
-| **Use cases** | Deposits, big spend approvals, merchant payments needing consent | Parking, tolls, fares, API data — anything pre-approved |
-| **Payment size** | $10 - $500+ | $0.50 - $15 (micro-transactions) + $0.001 (data APIs) |
-| **Settlement** | Individual on-chain tx | Batched off-chain, periodic on-chain (gas-free) |
-| **Gas cost** | Borne by user per tx | Zero (Circle absorbs) |
-| **Interaction** | Wallet popup, QR scan, approval flow | No UI — agent just pays |
-| **When it triggers** | User deposits funds, group votes on big purchase | Agent encounters a toll, parking, fare, or needs data |
+| **Micro-transactions** (parking, tolls, fares, $0.50-$15) | Arc Nanopayments (gas-free, batched via Gateway) | None — agent auto-pays |
+| **Data APIs** ($0.001-$0.01/call) | x402 protocol on Arc | None — agent pays per-query |
+| **Medium transactions** (gas fill-up, restaurant, $15-$100) | Direct `treasury.spend()` on Arc | None if under auto-limit |
+| **Large transactions** (hotel, activities, >$100) | `treasury.spend()` on Arc after approval | In-app tap-to-approve (2-of-3 vote) |
+| **Physical merchant POS** | Virtual card funded from treasury (TODO) | User taps card at terminal |
 
-The split is clean: WalletConnect handles the moments humans need to be involved. Arc nanopayments handle everything the user has deemed okay to spend without asking.
+### Layer Separation
 
-### Clean Layer Separation (Resolved Architecture)
+| Layer | Technology | Role |
+|-------|-----------|------|
+| **Wallet connection & auth** | Reown AppKit | Connect wallet, SIWE login — infrastructure only |
+| **Autonomous spending** | Arc Nanopayments + x402 | Gas-free micro-payments, data API payments |
+| **Treasury spending** | Arc GroupTreasury.sol | On-chain spending with rules, caps, receipts |
+| **Agent custody** | Circle Programmable Wallets | MPC-secured signer (no raw keys) |
+| **Cross-chain deposits** | CCTP V2 + Gateway | Bridge USDC from any chain to Arc |
+| **Human approval** | In-app voting (web app) | Tap to approve, backend records votes |
+| **Real-world off-ramp** | Virtual cards (TODO) | Disposable Visa/MC from treasury USDC |
 
-| Layer | Technology | Role | Example |
-|-------|-----------|------|---------|
-| **Human UX — connect & fund** | Reown AppKit | Wallet connect, auth (SIWE), deposits | User funds the car's wallet via WalletConnect |
-| **Human UX — approve big spends** | WalletConnect Pay | Group vote + approval for over-limit purchases | 2 of 3 friends approve a $220 hotel booking |
-| **Autonomous — pre-approved spending** | Arc Nanopayments | Agent streams gas-free micro-payments for parking, tolls, fares | Agent pays $4.50 toll — no popup, no human |
-| **Autonomous — data APIs** | x402 / Circle Nanopayments | Agent pays per-query for intelligence | Agent pays $0.005 for restaurant ratings data |
-| **Agent custody** | Circle Programmable Wallets | MPC-secured signer for the AI agent (no raw keys) | Agent signs treasury spend transactions |
-| **Treasury & settlement** | Arc + GroupTreasury.sol | On-chain source of truth for group funds | Budget tracking, spending rules, receipts |
-| **Cross-chain** | CCTP V2 + Gateway | Bridge USDC from any chain to Arc treasury | Friend deposits from Base, arrives on Arc |
+### Agent Authority Model
 
-### The Agent Authority Model (Contradiction Resolved)
-
-The existing docs had three conflicting proposals for how the agent signs transactions:
-1. Fixed authorized agent wallet (original design spec)
-2. Per-user Smart Sessions / ERC-7715 (WalletConnect integration doc)
-3. Circle Programmable Wallets / MPC (Arc integration doc)
-
-**Resolution: Circle Programmable Wallets is the canonical agent signer.** Reasons:
+**Circle Programmable Wallets is the canonical agent signer.**
 - MPC key security — no single point of failure, no raw key in Claude session
 - API-driven — agent calls Circle's API to sign, key never exists in memory
 - Arc-native — first-party integration, supports "ARC-TESTNET" as blockchain param
 - Aligns with Arc's Track 3 (agentic economy) narrative
-
-WalletConnect's role remains deep through:
-- AppKit for all user-facing wallet connection and auth
-- WalletConnect Pay for merchant checkout (human-approved payments)
-- Smart Sessions as an optional bonus — users grant the agent scoped permissions via ERC-7715, which the agent exercises through its Circle wallet
-- Agent SDK for cross-chain bridging when WC Pay settles on non-Arc chains
-
-### Important Caveat: WalletConnect Pay Chain Support
-
-WalletConnect Pay currently supports USDC on **Ethereum, Base, Optimism, Polygon, Arbitrum** — **not Arc directly**. This means:
-
-- Merchant payments via WC Pay settle on one of those chains (likely Base for speed/cost)
-- The treasury lives on Arc
-- CCTP V2 bridges the settlement back to Arc if needed
-- This actually **reinforces the separation**: WC Pay handles merchant UX on chains it supports, Arc handles the treasury and agent economy
-
-For the demo, this is fine — the merchant payment flow works on Base, the treasury and nanopayments work on Arc, and CCTP bridges between them transparently.
 
 ---
 
@@ -434,19 +402,18 @@ For the demo, this is fine — the merchant payment flow works on Base, the trea
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│              HUMAN LAYER (WalletConnect)                       │
+│              HUMAN LAYER (Reown AppKit + Web App)              │
 │                                                               │
-│  Reown AppKit: wallet connect, SIWE auth, deposit USDC       │
-│  WalletConnect Pay: approve big spends, group voting UX       │
-│  Smart Sessions (ERC-7715): define what agent can auto-spend  │
-│  In-app swaps + onramp: fiat → USDC funding flow             │
+│  Reown AppKit: wallet connect, SIWE auth                     │
+│  Web App: deposit USDC, trip dashboard, in-app approval UX   │
 │                                                               │
-│  WHEN: human deposits, human approves, human checks dashboard │
+│  WHEN: human deposits, human approves big spend, checks dash  │
 └──────────────────────────┬───────────────────────────────────┘
                            │
                ┌───────────▼───────────┐
                │     ORCHESTRATOR      │
                │  FastAPI + SIWE Auth  │
+               │  + Approval endpoints │
                └───────────┬───────────┘
                            │
                ┌───────────▼───────────┐
@@ -466,22 +433,23 @@ For the demo, this is fine — the merchant payment flow works on Base, the trea
        │                   │                    │
        ▼                   ▼                    ▼
 ┌──────────────────┐  ┌──────────────┐  ┌──────────────────┐
-│ AUTONOMOUS AGENT │  │ CROSS-CHAIN  │  │  MULTI-CURRENCY  │
-│ PAYMENTS (Arc)   │  │              │  │                  │
+│  ALL PAYMENTS    │  │ CROSS-CHAIN  │  │  MULTI-CURRENCY  │
+│  (Arc)           │  │              │  │                  │
 │                  │  │ CCTP V2 +   │  │  StableFX        │
-│ Parking: $3-8    │  │ Gateway      │  │  (USDC ↔ EURC)   │
-│ Tolls: $4-6      │  │              │  │  Atomic PvP FX   │
-│ Fares: $5-10     │  │ Hooks auto-  │  │  for cross-border│
-│ Data APIs: $0.001│  │ deposit into │  │  spending         │
-│ ALL gas-free     │  │ treasury     │  │                  │
-│ NO human needed  │  │              │  │                  │
+│ Nano: parking,   │  │ Gateway      │  │  (USDC ↔ EURC)   │
+│  tolls, fares,   │  │              │  │  Atomic PvP FX   │
+│  data APIs       │  │ Hooks auto-  │  │  for cross-border│
+│ Direct: gas,     │  │ deposit into │  │  spending         │
+│  food, hotel     │  │ treasury     │  │                  │
+│ All on Arc       │  │              │  │                  │
 └──────────────────┘  └──────────────┘  └──────────────────┘
 
 SUMMARY:
-  Human deposits + approves big spends → WalletConnect (Reown AppKit + Pay)
-  Agent pays parking, tolls, fares, data → Arc Nanopayments (gas-free, autonomous)
-  Agent identity: ERC-8004 (IdentityRegistry + ReputationRegistry) — Arc-native
-  Agent wallet: Circle Programmable Wallets (MPC, no raw keys) — canonical signer
+  Human connects wallet + deposits → Reown AppKit + Arc treasury
+  Human approves big spends → In-app tap-to-approve
+  Agent pays everything → Arc (nanopayments for micro, direct tx for larger)
+  Agent identity: ERC-8004 (IdentityRegistry + ReputationRegistry)
+  Agent wallet: Circle Programmable Wallets (MPC, no raw keys)
   Gas sponsorship: Circle Paymaster (users pay zero gas for deposits)
 ```
 
