@@ -1,120 +1,156 @@
 /**
- * 0G Storage wrapper — handles KV store and file operations on the 0G network.
+ * 0G Storage wrapper — handles data and file operations on the 0G network.
  *
- * Uses @0glabs/0g-ts-sdk with ethers v6.
+ * Uses 0G file storage (MemData uploads) for all data persistence.
+ * Each piece of trip data is uploaded as a content-addressed file,
+ * producing a Merkle root hash for permanent retrieval.
+ *
+ * A local index maps (tripId, key) -> rootHash so data can be looked up.
  */
 
-import { Indexer, ZgFile, MemData, KvClient, Batcher, getFlowContract } from "@0glabs/0g-ts-sdk";
+import { Indexer, ZgFile, MemData } from "@0gfoundation/0g-ts-sdk";
 import { ethers } from "ethers";
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
+import { join } from "path";
 
 export interface ZeroGConfig {
   privateKey: string;
   rpcUrl: string;
   indexerUrl: string;
-  kvNodeUrl: string;
-  flowContractAddress: string;
+  kvNodeUrl: string;         // kept for config compat, not used
+  flowContractAddress: string; // kept for config compat, not used
+  indexDir?: string;          // where to store the rootHash index locally
 }
 
 export class ZeroGStorage {
   private config: ZeroGConfig;
   private signer: ethers.Wallet | null = null;
   private indexer: Indexer | null = null;
-  private kvClient: KvClient | null = null;
   private initialized = false;
+  private indexDir: string;
+  // In-memory index: "tripId:key" -> rootHash
+  private hashIndex: Map<string, string> = new Map();
 
   constructor(config: ZeroGConfig) {
     this.config = config;
+    this.indexDir = config.indexDir ?? "./trip-data/.0g-index";
   }
 
   async initialize(): Promise<void> {
     const provider = new ethers.JsonRpcProvider(this.config.rpcUrl);
     this.signer = new ethers.Wallet(this.config.privateKey, provider);
     this.indexer = new Indexer(this.config.indexerUrl);
-    this.kvClient = new KvClient(this.config.kvNodeUrl);
 
-    // Verify connectivity by checking signer balance
+    // Verify connectivity
     const balance = await provider.getBalance(this.signer.address);
     console.error(`[0g-storage] Agent wallet ${this.signer.address} balance: ${ethers.formatEther(balance)} 0G`);
 
     if (balance === 0n) {
-      console.error("[0g-storage] WARNING: Zero balance — KV writes will fail. Fund via https://faucet.0g.ai");
+      console.error("[0g-storage] WARNING: Zero balance — uploads will fail. Fund via https://faucet.0g.ai");
     }
+
+    // Load the local hash index
+    this.loadIndex();
 
     this.initialized = true;
   }
 
-  /**
-   * Generate a deterministic stream ID for a trip.
-   * Stream IDs are bytes32 hex strings used as KV namespaces.
-   */
-  private getStreamId(tripId: number): string {
-    return ethers.keccak256(ethers.toUtf8Bytes(`roadtrip-copilot:trip:${tripId}`));
+  private indexPath(): string {
+    mkdirSync(this.indexDir, { recursive: true });
+    return join(this.indexDir, "hash-index.json");
+  }
+
+  private loadIndex(): void {
+    const path = this.indexPath();
+    if (existsSync(path)) {
+      try {
+        const raw = JSON.parse(readFileSync(path, "utf-8"));
+        this.hashIndex = new Map(Object.entries(raw));
+      } catch {
+        this.hashIndex = new Map();
+      }
+    }
+  }
+
+  private saveIndex(): void {
+    const path = this.indexPath();
+    const obj: Record<string, string> = {};
+    for (const [k, v] of this.hashIndex) obj[k] = v;
+    writeFileSync(path, JSON.stringify(obj, null, 2));
+  }
+
+  private indexKey(tripId: number, key: string): string {
+    return `${tripId}:${key}`;
   }
 
   /**
-   * Write a key-value pair to 0G KV store.
-   * Requires on-chain transaction (costs gas).
+   * Store structured data to 0G Storage as a content-addressed file.
+   * Returns the Merkle root hash for permanent retrieval.
    */
-  async kvSet(tripId: number, key: string, value: any): Promise<{ txHash?: string }> {
+  async kvSet(tripId: number, key: string, value: any): Promise<{ rootHash: string; txHash: string }> {
     if (!this.initialized || !this.signer || !this.indexer) {
       throw new Error("0G Storage not initialized");
     }
 
-    const streamId = this.getStreamId(tripId);
-    const keyBytes = new TextEncoder().encode(key);
-    const valueBytes = new TextEncoder().encode(JSON.stringify(value));
+    // Serialize data with metadata envelope
+    const envelope = {
+      _tripId: tripId,
+      _key: key,
+      _timestamp: Date.now(),
+      data: value,
+    };
+    const bytes = new TextEncoder().encode(JSON.stringify(envelope, null, 2));
 
-    // Select storage nodes
-    const [nodes, nodesErr] = await this.indexer.selectNodes(1);
-    if (nodesErr || !nodes || nodes.length === 0) {
-      throw new Error(`Failed to select storage nodes: ${nodesErr?.message ?? "no nodes available"}`);
+    // Upload as in-memory file to 0G Storage
+    const memData = new MemData(bytes);
+    const [tx, err] = await this.indexer!.upload(memData, this.config.rpcUrl, this.signer!);
+    if (err) {
+      throw new Error(`0G upload failed: ${err.message}`);
     }
 
-    // Get flow contract
-    const flowContract = getFlowContract(this.config.flowContractAddress, this.signer);
+    const result = tx as any;
+    const rootHash = result.rootHash ?? result.rootHashes?.[0] ?? "";
+    const txHash = result.txHash ?? result.txHashes?.[0] ?? "";
 
-    // Create batcher and set KV pair
-    const batcher = new Batcher(1, nodes, flowContract, this.config.rpcUrl);
-    batcher.streamDataBuilder.set(streamId, keyBytes, valueBytes);
+    // Update local index
+    this.hashIndex.set(this.indexKey(tripId, key), rootHash);
+    this.saveIndex();
 
-    // Send on-chain tx + upload to storage nodes
-    const [tx, batchErr] = await batcher.exec();
-    if (batchErr) {
-      throw new Error(`KV write failed: ${batchErr.message}`);
-    }
-
-    return { txHash: tx?.txHash };
+    return { rootHash, txHash };
   }
 
   /**
-   * Read a key-value pair from 0G KV store (read-only, no gas).
+   * Load structured data from 0G Storage by looking up the root hash in the index,
+   * then downloading the content-addressed file.
    */
   async kvGet(tripId: number, key: string): Promise<any | null> {
-    if (!this.kvClient) {
+    if (!this.indexer) {
       throw new Error("0G Storage not initialized");
     }
 
-    const streamId = this.getStreamId(tripId);
-    const keyBytes = new TextEncoder().encode(key);
+    const rootHash = this.hashIndex.get(this.indexKey(tripId, key));
+    if (!rootHash) return null;
 
+    // Download to a temp file
+    const tmpPath = `/tmp/0g-trip-${tripId}-${key}-${Date.now()}.json`;
     try {
-      const value = await this.kvClient.getValue(streamId, keyBytes);
-      if (!value || !value.data) return null;
-
-      const decoded = Buffer.from(value.data, "base64").toString("utf-8");
-      return JSON.parse(decoded);
-    } catch (err: any) {
-      // Key not found is not an error
-      if (err.message?.includes("not found") || err.message?.includes("null")) {
-        return null;
+      const err = await this.indexer.download(rootHash, tmpPath, false);
+      if (err) {
+        throw new Error(`Download failed: ${err.message}`);
       }
-      throw err;
+      const raw = JSON.parse(readFileSync(tmpPath, "utf-8"));
+      return raw.data ?? raw;
+    } catch (e: any) {
+      console.error(`[0g-storage] kvGet download failed: ${e.message}`);
+      return null;
+    } finally {
+      // Clean up temp file
+      try { require("fs").unlinkSync(tmpPath); } catch {}
     }
   }
 
   /**
    * Upload a file to 0G decentralized storage.
-   * Returns content-addressed root hash for permanent retrieval.
    */
   async uploadFile(filePath: string): Promise<{ rootHash: string; txHash: string }> {
     if (!this.initialized || !this.signer || !this.indexer) {
@@ -122,14 +158,11 @@ export class ZeroGStorage {
     }
 
     const file = await ZgFile.fromFilePath(filePath);
-
     try {
       const [tx, err] = await this.indexer.upload(file, this.config.rpcUrl, this.signer);
       if (err) {
         throw new Error(`File upload failed: ${err.message}`);
       }
-
-      // Handle both single and fragmented upload results
       const result = tx as any;
       return {
         rootHash: result.rootHash ?? result.rootHashes?.[0] ?? "",
@@ -153,7 +186,6 @@ export class ZeroGStorage {
     if (err) {
       throw new Error(`Data upload failed: ${err.message}`);
     }
-
     const result = tx as any;
     return {
       rootHash: result.rootHash ?? result.rootHashes?.[0] ?? "",
@@ -168,10 +200,16 @@ export class ZeroGStorage {
     if (!this.indexer) {
       throw new Error("0G Storage not initialized");
     }
-
     const err = await this.indexer.download(rootHash, outputPath, false);
     if (err) {
       throw new Error(`File download failed: ${err.message}`);
     }
+  }
+
+  /**
+   * Get the root hash for a given trip data key (for verification/explorer links).
+   */
+  getRootHash(tripId: number, key: string): string | undefined {
+    return this.hashIndex.get(this.indexKey(tripId, key));
   }
 }

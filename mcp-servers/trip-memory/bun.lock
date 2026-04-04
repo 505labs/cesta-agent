@@ -4,6 +4,7 @@
     "": {
       "name": "trip-memory-mcp",
       "dependencies": {
+        "@0gfoundation/0g-ts-sdk": "1.2.1",
         "@0glabs/0g-ts-sdk": "^0.3.3",
         "@modelcontextprotocol/sdk": "^1.0.0",
         "ethers": "6.13.1",
@@ -14,6 +15,8 @@
     },
   },
   "packages": {
+    "@0gfoundation/0g-ts-sdk": ["@0gfoundation/0g-ts-sdk@1.2.1", "", { "dependencies": { "@ethersproject/bytes": "^5.7.0", "@ethersproject/keccak256": "^5.7.0", "open-jsonrpc-provider": "^0.2.1" }, "peerDependencies": { "ethers": "6.13.1" } }, "sha512-1PBq+aug6p3OYh9UbEDxn+mroQ4XCjd7355wwStfd8ykyKMXHTdrSuNrfranr5TnF/uksKUWnN3HJ73gYKKDpw=="],
+
     "@0glabs/0g-ts-sdk": ["@0glabs/0g-ts-sdk@0.3.3", "", { "dependencies": { "@ethersproject/bytes": "^5.7.0", "@ethersproject/keccak256": "^5.7.0", "open-jsonrpc-provider": "^0.2.1" }, "peerDependencies": { "ethers": "6.13.1" } }, "sha512-Ug/9gdeBnmTYU6obPXWChD8XqNUSyOI53vWWsbK2IXNymQc84gd1cDneQ2Vz2AZP26290pIp5FgmNgkVNOyxIA=="],
 
     "@adraffy/ens-normalize": ["@adraffy/ens-normalize@1.10.1", "", {}, "sha512-96Z2IP3mYmF1Xg2cDm8f1gWGf/HUVedQ3FMifV4kG/PQ4yEP51xDtRAEfhVNt5f/uzpNkZHwWQuUcu6D6K+Ekw=="],

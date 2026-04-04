@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { readFileSync, existsSync, rmSync, mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
-import { ZeroGStorage } from "./storage-0g.js";
+import { ZeroGStorage } from "./storage-0g.ts";
 
 const TEST_DIR = "/tmp/trip-memory-test-data";
 
@@ -101,24 +101,15 @@ describe("ZeroGStorage — Unit Tests", () => {
     expect(storage).toBeDefined();
   });
 
-  test("getStreamId is deterministic", () => {
-    // Access private method via prototype hack for testing
+  test("getRootHash returns undefined for unknown key", () => {
     const storage = new ZeroGStorage({
       privateKey: "0x0000000000000000000000000000000000000000000000000000000000000001",
       rpcUrl: "https://evmrpc-testnet.0g.ai",
       indexerUrl: "https://indexer-storage-testnet-turbo.0g.ai",
-      kvNodeUrl: "http://3.101.147.150:6789",
-      flowContractAddress: "0x22E03a6A89B950F1c82ec5e74F8eCa321a105296",
+      kvNodeUrl: "",
+      flowContractAddress: "",
     });
 
-    // Call getStreamId via bracket notation
-    const id1 = (storage as any)["getStreamId"](42);
-    const id2 = (storage as any)["getStreamId"](42);
-    const id3 = (storage as any)["getStreamId"](43);
-
-    expect(id1).toBe(id2); // Same trip => same stream
-    expect(id1).not.toBe(id3); // Different trip => different stream
-    expect(id1.startsWith("0x")).toBe(true);
-    expect(id1.length).toBe(66); // bytes32 hex = 0x + 64 chars
+    expect(storage.getRootHash(42, "nonexistent")).toBeUndefined();
   });
 });

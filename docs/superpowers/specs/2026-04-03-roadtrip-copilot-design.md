@@ -62,7 +62,9 @@ Arc is the single payment layer for everything the agent does. No split payment 
 
 ### What It Is
 
-A shared on-chain smart contract on Arc where friends pool USDC for a road trip. USDC is Arc's native gas token, so there's no separate gas token to manage — everything is USDC. The contract enforces spending rules, tracks every expense by category and person, and automatically settles when the trip ends.
+A shared on-chain smart contract on Arc where friends pool USDC for a road trip. USDC is Arc's native gas token, so there's no separate gas token to manage — everything is USDC. The contract enforces spending rules, tracks every expense by category, and automatically settles when the trip ends.
+
+> **Note:** On-chain `createTrip()` accepts only 3 parameters (usdc, agent, spendLimit). Daily cap and category budgets are configured via separate `setDailyCap()` and `setCategoryBudget()` calls after the trip is created. The current contract uses ERC-20 `safeTransferFrom` for deposits, requiring a prior `approve()` call.
 
 ### User Flow
 
@@ -90,7 +92,7 @@ Flow:
 Each friend:
 - Connects wallet via WalletConnect (this also logs them in)
 - Deposits their USDC share into the group pool on Arc
-- If their USDC is on another chain, Arc's Gateway/CCTP bridges it seamlessly (chain abstraction)
+- If their USDC is on another chain, users can switch chains and deposit directly. (CCTP cross-chain bridging is a stretch goal, not yet implemented.)
 
 All members see the pool fill up in real-time.
 
@@ -98,7 +100,7 @@ All members see the pool fill up in real-time.
 
 - Pool balance always visible in the app
 - Every agent spend appears as a line item: what, where, when, amount, category
-- Running per-person consumption tracked: "Alice: $127, Bob: $94, Carol: $156"
+- Running per-person deposits tracked: "Alice: $200, Bob: $200, Carol: $200"
 - Category budget burn shown: "Food: $210 / $400, Gas: $89 / $200"
 
 **5. Trip End / Settlement**
@@ -112,7 +114,7 @@ All members see the pool fill up in real-time.
 
 - **Deposits:** USDC only (native on Arc — no approval needed, direct transfer)
 - **Spending rules:** Per-transaction cap, daily cap, category budgets — configurable at trip creation
-- **Agent authorization:** Only the designated agent wallet can initiate spends
+- **Agent authorization:** The designated agent wallet can initiate spends. For vote requests, both agent and organizer are authorized.
 - **Group voting:** Spends exceeding the auto-limit trigger a vote. Configurable threshold (majority/unanimous)
 - **Emergency withdrawal:** Any member can pull their remaining proportional share at any time
 - **On-chain receipts:** Every transaction emits events with: amount, recipient, category, timestamp, description
@@ -140,26 +142,27 @@ The agent gets its capabilities through MCP servers and custom tools loaded into
 - Requires: `GOOGLE_MAPS_API_KEY` env var
 - Gives the agent real place search, directions, and POI data
 
-**MCP Server: EVM/Blockchain (`evm-mcp-server`)**
-- Existing open-source: `github.com/mcpdotdirect/evm-mcp-server`
-- Tools: `get_balance`, `read_contract`, `send_transaction`, `get_token_balance`
-- Gives the agent ability to read treasury state, check balances, interact with smart contracts
-
 **Custom MCP Server: Trip Treasury**
 - Build custom — wraps the treasury smart contract in ergonomic tools
 - Tools:
   - `treasury_balance` — current pool balance, per-person spend, category budgets
-  - `treasury_spend` — initiate a USDC payment from the pool (calls contract + WalletConnect Pay)
+  - `treasury_spend` — initiate a USDC payment from the pool (calls contract directly on Arc)
   - `treasury_history` — recent transactions from the pool
   - `group_vote_request` — trigger a vote for spends over the limit
   - `group_vote_status` — check vote results
+  - `nanopayment_spend` — stream gas-free micro-payments for parking, tolls, fares
+  - `x402_data_request` — pay for data APIs via x402 protocol
+  - `treasury_category_budgets` — get budget vs. spent per category
 
 **Custom MCP Server: Trip Memory (0G Storage)**
 - Build custom — wraps 0G Storage SDK
 - Tools:
   - `save_trip_data` — persist itinerary, preferences, conversation context to 0G
   - `load_trip_data` — retrieve persisted data
-  - `save_trip_photo` — store trip photos/media on 0G
+  - `save_trip_file` — store trip files (photos, receipts) on 0G
+  - `load_trip_file` — download a file from 0G by root hash
+  - `list_trip_keys` — list all saved keys for a trip
+  - `storage_status` — check whether 0G or local fallback is active
 
 **Voice Channel (existing from claude-superapp)**
 - `voice_reply` tool — sends spoken response back through the TTS pipeline
@@ -243,7 +246,7 @@ For larger purchases that exceed the auto-spend limit:
 ### 0G Integration
 
 - **0G Storage:** Trip conversation history, user preferences, itinerary state persisted via `trip-memory-mcp`. Survives session restarts. Queryable across devices.
-- **0G Compute:** If needed, offload heavy tasks (route optimization, trip report generation)
+- **0G Compute:** TEE-verified inference via the `0g-compute` MCP server. Three tools: `verified_evaluate` (TEE-sealed inference), `list_providers`, `compute_status`. Falls back to agent's own reasoning when providers are unavailable.
 - **OpenClaw framing:** The agent is positioned as an OpenClaw-style agent running on 0G infrastructure. Claude is the LLM backend, 0G provides storage and compute.
 
 ### Arc Integration — The Autonomous Agent Layer (Track 3: Agentic Nanopayments)
@@ -253,7 +256,7 @@ Arc handles everything the agent does without human involvement:
 - **Nanopayments for pre-approved spending:** Agent streams gas-free USDC payments for parking ($3), tolls ($5), fares ($8), small food purchases ($12) — anything under the auto-spend limit. No wallet popup, no gas cost, no UX friction. This is economically impossible on Ethereum (gas > payment) but trivial on Arc.
 - **Nanopayments for data APIs (x402):** Agent pays $0.001-$0.01 per API call for gas prices, weather, restaurant data — the agent buys its own intelligence from the treasury.
 - **Treasury contract on Arc testnet:** USDC is native gas token — one token for everything. Sub-second finality means dashboard updates instantly.
-- **Agent identity (ERC-8004):** Verifiable on-chain identity for the AI agent — reputation and trust.
+- **Agent identity (ERC-7857 iNFT on 0G Chain):** Verifiable on-chain identity for the AI agent — reputation and trust. Implemented via custom `AgentNFT.sol` + `AgentReputation.sol` on 0G Galileo Testnet.
 
 Arc does NOT handle: wallet connection, user authentication, or human-approved payments. Those go through WalletConnect.
 
@@ -316,12 +319,14 @@ All payments (both autonomous and human-approved) go through Arc. Reown is the f
 
 | Component | Tech |
 |-----------|------|
-| Smart contracts | Solidity on Arc testnet. GroupTreasury.sol. |
+| Smart contracts | Solidity. GroupTreasury.sol on Arc testnet. AgentNFT.sol, AgentReputation.sol, TripRegistry.sol on 0G Galileo testnet. |
 | Web frontend | React/Next.js. Reown AppKit for wallet connection. Voice UI via browser mic. |
 | Trip Treasury MCP | TypeScript MCP server wrapping treasury contract + Arc nanopayments |
 | Trip Memory MCP | TypeScript MCP server wrapping 0G Storage SDK |
+| 0G Compute MCP | TypeScript MCP server for TEE-verified inference (verified_evaluate, list_providers, compute_status) |
+| x402 Mock Server | TypeScript HTTP server implementing x402 payment protocol with 4 paid data endpoints |
 | Arc Payments integration | x402/nanopayments for micro-transactions + direct on-chain tx for larger payments |
-| In-app approval system | Group voting for over-limit spends (backend + frontend) |
+| In-app approval system | Group voting for over-limit spends (on-chain + backend + frontend) |
 
 ### Chain: Arc Testnet
 

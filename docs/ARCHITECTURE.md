@@ -29,7 +29,7 @@ A voice-first AI road trip assistant with a shared crypto wallet. The system has
  +------------------+
  |  Web App         |            +-----------------------+
  |  (Next.js)       |---HTTP---->|                       |
- |  - WalletConnect |            |    Orchestrator       |
+ |  - Reown AppKit |            |    Orchestrator       |
  |  - Voice (mic)   |            |    (FastAPI :8080)    |
  |  - Dashboard     |            |                       |
  +------------------+            |  Endpoints:           |
@@ -58,7 +58,7 @@ A voice-first AI road trip assistant with a shared crypto wallet. The system has
 
 ### 1. Smart Contracts (`contracts/`)
 
-**What:** A Solidity smart contract (`GroupTreasury.sol`) deployed on Arc testnet (or local Anvil).
+**What:** Solidity smart contracts deployed on Arc testnet and 0G Galileo testnet.
 
 **What it does:**
 - `createTrip(usdc, agent, spendLimit)` — Creates a new trip with an authorized AI agent wallet and per-transaction spend cap
@@ -67,17 +67,33 @@ A voice-first AI road trip assistant with a shared crypto wallet. The system has
 - `settle(tripId)` — Ends the trip, returns leftover USDC proportionally to depositors
 - `emergencyWithdraw(tripId)` — Any member can pull their share at any time
 - View functions: `getTrip`, `getBalance`, `getMembers`, `getSpends`, `getMemberDeposit`
+- `setDailyCap(tripId, dailyCap)` — Set daily spending cap
+- `setCategoryBudget(tripId, category, budget)` — Set per-category budget
+- `nanopayment(tripId, recipient, amount, category, description)` — Gas-free micro-transaction
+- `requestVote(tripId, recipient, amount, category, description, threshold)` — Initiate group vote
+- `castVote(voteId)` — Cast a member vote
+- `executeVote(voteId)` — Execute approved vote
+- Additional views: `getCategoryBudget`, `getDailySpending`, `getNanopaymentTotal`, `getVoteRequest`
 
 **Key design:**
 - USDC only (on Arc, USDC is the native gas token — no ETH needed)
 - Every spend emits on-chain events with category and description
 - The agent wallet address is set at trip creation and cannot be changed
-- 14 Foundry tests covering all functions and edge cases
+- 76 Foundry tests across 4 contracts
 
 **Files:**
-- `contracts/src/GroupTreasury.sol` — The contract (190 lines)
-- `contracts/test/GroupTreasury.t.sol` — Tests with MockUSDC (170 lines)
-- `contracts/script/Deploy.s.sol` — Foundry deploy script
+- `contracts/src/GroupTreasury.sol` — Group treasury contract (236 lines)
+- `contracts/src/AgentNFT.sol` — ERC-7857 iNFT for AI agent identity (deployed on 0G Galileo)
+- `contracts/src/AgentReputation.sol` — On-chain agent rating and reputation tracking
+- `contracts/src/TripRegistry.sol` — Links trips to agent iNFTs and 0G Storage stream IDs
+- `contracts/test/GroupTreasury.t.sol` — 36 tests
+- `contracts/test/AgentNFT.t.sol` — 12 tests
+- `contracts/test/AgentReputation.t.sol` — 14 tests
+- `contracts/test/TripRegistry.t.sol` — 14 tests
+- `contracts/script/Deploy.s.sol` — Deploy GroupTreasury to Arc/Anvil
+- `contracts/script/Deploy0G.s.sol` — Deploy AgentNFT, AgentReputation, TripRegistry to 0G
+- `contracts/script/MintAgent.s.sol` — Mint agent iNFT
+- `contracts/script/IntegrationTest.s.sol` — Full integration test
 
 ---
 
@@ -94,22 +110,30 @@ Wraps the GroupTreasury smart contract via `viem`. The AI agent calls these tool
 | `treasury_balance` | Returns pool balance, per-member deposits, spend limit, trip status |
 | `treasury_spend` | Sends USDC from the pool to a recipient (calls the contract's `spend` function) |
 | `treasury_history` | Returns all past spends with category, description, amount, timestamp |
+| `nanopayment_spend` | Sends a gas-free micro-payment for parking, tolls, fares, data fees |
+| `x402_data_request` | Pays for data via x402 HTTP 402 payment flow (gas prices, weather, restaurants) |
+| `treasury_category_budgets` | Returns budget vs. spent per category (food, gas, lodging, etc.) |
+| `group_vote_request` | Initiates a member vote for spends over the auto-limit |
+| `group_vote_status` | Checks vote progress and whether threshold is met |
 
 **How it works:** Uses `viem` to create a public client (for reads) and a wallet client (for writes, using the agent's private key). Connects to the RPC endpoint for the blockchain where the contract is deployed.
 
-**Env vars:** `RPC_URL`, `TREASURY_ADDRESS`, `AGENT_PRIVATE_KEY`, `CHAIN_ID`
+**Env vars:** `RPC_URL`, `TREASURY_ADDRESS`, `AGENT_PRIVATE_KEY`, `CHAIN_ID`, `X402_SERVER_URL`
 
 #### Trip Memory MCP (`mcp-servers/trip-memory/`)
 
-Persists trip data to local JSON files (with 0G Storage as future decentralized backend).
+Persists trip data to 0G decentralized storage (KV store + file upload) with local JSON files as fallback when 0G is unavailable.
 
 | Tool | What it does |
 |------|-------------|
 | `save_trip_data` | Save any JSON data under a key (e.g., "preferences", "itinerary") |
 | `load_trip_data` | Retrieve saved data by key |
 | `list_trip_keys` | List all saved keys for a trip |
+| `save_trip_file` | Upload a file (photo, receipt) to 0G decentralized storage |
+| `load_trip_file` | Download a file from 0G by root hash |
+| `storage_status` | Check whether 0G or local fallback is active |
 
-**How it works:** Each trip gets a directory (`trip-data/trip-{id}/`), each key is a JSON file. Simple and hackathon-appropriate.
+**How it works:** Primary storage is 0G Storage via `@0gfoundation/0g-ts-sdk`. Falls back to local JSON files (`trip-data/trip-{id}/`) when 0G is unavailable.
 
 ---
 
@@ -117,7 +141,7 @@ Persists trip data to local JSON files (with 0G Storage as future decentralized 
 
 **What:** A FastAPI backend that serves as the central hub. All clients (web, Android Auto) talk to this.
 
-#### Auth Flow (SIWE / WalletConnect)
+#### Auth Flow (SIWE / Reown AppKit)
 
 ```
 Client                          Orchestrator
@@ -219,14 +243,15 @@ POST /v1/text/converse {text: "how's our budget?", trip_id: 1}
 - Budget-aware spending (checks balance before suggesting expensive options)
 - Category tracking (every spend tagged as food/gas/lodging/activities)
 
-**.mcp.json** loads 4 MCP servers into the session:
+**.mcp.json** loads 5 MCP servers into the session:
 
 | MCP Server | Tools | Source |
 |-----------|-------|--------|
 | `google-maps` | `maps_search_places`, `maps_place_details`, `maps_directions`, `maps_distance_matrix` | Official Anthropic MCP (`@modelcontextprotocol/server-google-maps`) |
 | `weather` | `get_forecast`, `get_alerts` | Official Anthropic MCP (`@modelcontextprotocol/server-weather`) |
-| `treasury` | `treasury_balance`, `treasury_spend`, `treasury_history` | Custom (`mcp-servers/treasury/`) |
-| `trip-memory` | `save_trip_data`, `load_trip_data`, `list_trip_keys` | Custom (`mcp-servers/trip-memory/`) |
+| `treasury` | `treasury_balance`, `treasury_spend`, `treasury_history`, `nanopayment_spend`, `x402_data_request`, `treasury_category_budgets`, `group_vote_request`, `group_vote_status` | Custom (`mcp-servers/treasury/`) |
+| `trip-memory` | `save_trip_data`, `load_trip_data`, `list_trip_keys`, `save_trip_file`, `load_trip_file`, `storage_status` | Custom (`mcp-servers/trip-memory/`) |
+| `0g-compute` | `verified_evaluate`, `list_providers`, `compute_status` | Custom (`mcp-servers/0g-compute/`) |
 
 Plus the **voice-channel** MCP loaded at Claude Code startup, which provides the `voice_reply` tool.
 
@@ -258,6 +283,10 @@ Plus the **voice-channel** MCP loaded at Claude Code startup, which provides the
 | `TreasuryDashboard` | Pool balance, total deposited/spent, member count, spend limit, budget progress bar, deposit form |
 | `SpendingFeed` | List of on-chain transactions from the treasury (reads `getSpends` from contract) |
 | `VoiceInterface` | Push-to-talk mic recording + text input fallback + message history |
+| `MultiChainDeposit` | Chain selector (Arc Testnet, Anvil, Sepolia, Base Sepolia) + deposit flow |
+| `PaymentApproval` | Approve/reject pending payment requests from the agent |
+| `AgentIdentity` | Displays agent iNFT (from AgentNFT contract) + reputation stats |
+| `ZeroGStatus` | Shows 0G Storage mode, 0G Compute status, and Galileo chain status |
 
 **Contract integration** (`lib/treasury.ts`): Wagmi hooks wrapping every GroupTreasury view function + deposit flow (approve USDC + deposit).
 
@@ -276,7 +305,7 @@ Plus the **voice-channel** MCP loaded at Claude Code startup, which provides the
 
 **What needs to change for road trip app:**
 - Point `ClaudeApiClient` at the new orchestrator URL
-- Add WalletConnect mobile wallet connection (or use the existing Bearer token auth initially)
+- Add Reown AppKit mobile wallet connection (or use the existing Bearer token auth initially)
 - Add a trip selection screen (list trips, pick active trip)
 - Pass `trip_id` in the converse request
 
@@ -357,12 +386,15 @@ Any Member (Web)           Orchestrator              Blockchain (Arc)
 
 | Component | Where it runs | Status |
 |-----------|--------------|--------|
-| GroupTreasury.sol | Local Anvil (chainId 31337) or Arc testnet | Deployed locally, 14 tests pass |
-| Orchestrator | Local (`:8080`) | Running, 15 tests pass |
+| GroupTreasury.sol | Local Anvil (chainId 31337) or Arc testnet | Deployed locally, 36 tests pass |
+| AgentNFT + AgentReputation + TripRegistry | 0G Galileo Testnet (16602) | Deployed, 40 tests pass |
+| Orchestrator | Local (`:8080`) | Running, 13 tests pass |
 | Voice VM (STT/TTS) | GCE GPU VM (existing from claude-superapp) | Already deployed |
 | voice-channel | Local (`:9000`) or App VM | Reused from claude-superapp |
 | Treasury MCP | Local (stdio, launched by Claude Code) | Built, deps installed |
 | Trip Memory MCP | Local (stdio, launched by Claude Code) | Built, deps installed |
+| 0G Compute MCP | Local (stdio, launched by Claude Code) | Built, deps installed |
+| x402 Mock Server | Local (`:4402`) | Built, 18 tests pass |
 | Web Frontend | Local (`:3000`) | Builds successfully (Next.js) |
 | Android Auto App | Android device/emulator | Existing app from claude-superapp, needs minor modifications |
 
@@ -373,7 +405,7 @@ Any Member (Web)           Orchestrator              Blockchain (Arc)
 ### Smart Contracts
 ```bash
 cd contracts
-forge test -vvv          # Run all 14 tests
+forge test -vvv          # Run all 76 tests
 forge test --match-test test_spend  # Run specific test
 ```
 
@@ -381,7 +413,7 @@ forge test --match-test test_spend  # Run specific test
 ```bash
 cd orchestrator
 source .venv/bin/activate
-pytest tests/ -v         # Run all 15 tests
+pytest tests/ -v         # Run all 13 tests
 pytest tests/test_auth.py -v  # Auth tests only
 pytest tests/test_trips.py -v # Trip + health tests
 ```
@@ -419,18 +451,40 @@ cd mcp-servers/trip-memory && echo '{"jsonrpc":"2.0","id":1,"method":"initialize
 ```
 ethglobal/
 +-- contracts/
-|   +-- src/GroupTreasury.sol          # Smart contract (190 lines)
-|   +-- test/GroupTreasury.t.sol       # Foundry tests (170 lines)
-|   +-- script/Deploy.s.sol           # Deploy script
+|   +-- src/
+|   |   +-- GroupTreasury.sol         # Group treasury (236 lines)
+|   |   +-- AgentNFT.sol              # ERC-7857 iNFT for agent identity
+|   |   +-- AgentReputation.sol       # On-chain agent ratings
+|   |   +-- TripRegistry.sol          # Trip lifecycle linked to agent + 0G
+|   +-- test/
+|   |   +-- GroupTreasury.t.sol       # 36 tests
+|   |   +-- AgentNFT.t.sol            # 12 tests
+|   |   +-- AgentReputation.t.sol     # 14 tests
+|   |   +-- TripRegistry.t.sol        # 14 tests
+|   +-- script/
+|   |   +-- Deploy.s.sol              # Deploy GroupTreasury to Arc/Anvil
+|   |   +-- Deploy0G.s.sol            # Deploy to 0G Galileo
+|   |   +-- MintAgent.s.sol           # Mint agent iNFT
+|   |   +-- IntegrationTest.s.sol     # Full integration test
 |   +-- foundry.toml                  # Foundry config
 |
 +-- mcp-servers/
 |   +-- treasury/
-|   |   +-- index.ts                  # Treasury MCP server
+|   |   +-- index.ts                  # Treasury MCP server (8 tools)
 |   |   +-- abi.ts                    # Contract ABI
 |   |   +-- package.json
 |   +-- trip-memory/
-|       +-- index.ts                  # Trip memory MCP server
+|   |   +-- index.ts                  # Trip memory MCP server (6 tools)
+|   |   +-- storage-0g.ts             # 0G Storage SDK wrapper
+|   |   +-- package.json
+|   +-- x402-mock/
+|   |   +-- index.ts                  # x402 payment protocol mock server
+|   |   +-- index.test.ts             # 18 tests
+|   |   +-- package.json
+|   +-- 0g-compute/
+|       +-- index.ts                  # 0G Compute MCP server (3 tools)
+|       +-- compute-0g.ts             # 0G Compute broker wrapper
+|       +-- setup.ts                  # One-time ledger + provider setup
 |       +-- package.json
 |
 +-- orchestrator/
@@ -440,7 +494,7 @@ ethglobal/
 |   +-- db.py                         # SQLite database layer
 |   +-- requirements.txt
 |   +-- tests/
-|       +-- test_auth.py              # Auth tests (7 tests)
+|       +-- test_auth.py              # Auth tests (5 tests)
 |       +-- test_trips.py             # Trip + health tests (8 tests)
 |       +-- conftest.py               # Test fixtures (temp DB)
 |
@@ -450,17 +504,24 @@ ethglobal/
 |   |   |   +-- layout.tsx            # Root layout with AppKit provider
 |   |   |   +-- page.tsx              # Landing: "Give your car a wallet" + trip management
 |   |   |   +-- trip/[id]/page.tsx    # Trip dashboard
+|   |   +-- context/
+|   |   |   +-- AuthContext.tsx       # SIWE auth context provider
 |   |   +-- components/
-|   |   |   +-- ConnectButton.tsx     # WalletConnect button
+|   |   |   +-- ConnectButton.tsx     # Reown AppKit wallet button
 |   |   |   +-- CreateTrip.tsx        # Trip creation form
 |   |   |   +-- TreasuryDashboard.tsx # Balance, deposits, budget progress
 |   |   |   +-- SpendingFeed.tsx      # Transaction history from contract
 |   |   |   +-- VoiceInterface.tsx    # Push-to-talk + text chat
+|   |   |   +-- MultiChainDeposit.tsx # Multi-chain deposit flow
+|   |   |   +-- PaymentApproval.tsx   # Approve/reject agent payment requests
+|   |   |   +-- AgentIdentity.tsx     # Agent iNFT + reputation display
+|   |   |   +-- ZeroGStatus.tsx       # 0G Storage/Compute/Chain status
 |   |   +-- lib/
 |   |   |   +-- wagmi.ts             # Chain config (Anvil / Arc testnet)
 |   |   |   +-- appkit.tsx           # Reown AppKit provider setup
 |   |   |   +-- treasury.ts          # Wagmi hooks for GroupTreasury contract
 |   |   |   +-- api.ts               # Orchestrator API client
+|   |   |   +-- siwe.ts              # SIWE message construction
 |   |   +-- abi/
 |   |       +-- GroupTreasury.json    # Contract ABI (from Foundry build)
 |   +-- next.config.ts

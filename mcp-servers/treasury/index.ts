@@ -50,6 +50,90 @@ if (AGENT_PRIVATE_KEY) {
   walletClient = createWalletClient({ account, chain, transport });
 }
 
+// --- x402 helper ---
+/**
+ * Performs the x402 payment flow for a given endpoint:
+ *  1. Fetch the URL (expect 402)
+ *  2. Parse payment requirements
+ *  3. Record nanopayment on-chain
+ *  4. Retry with X-PAYMENT header
+ *  Returns the response data, payment tx hash, block number, and payment amount.
+ */
+async function x402Flow(
+  tripId: bigint,
+  endpoint: string,
+  category: string,
+  descriptionText: string,
+  treasuryAddr: `0x${string}`
+): Promise<{
+  data: any;
+  paymentRequired: boolean;
+  txHash?: `0x${string}`;
+  blockNumber?: number;
+  amountRaw?: number;
+  amountUsd?: string;
+  recipient?: `0x${string}`;
+}> {
+  if (!walletClient) {
+    throw new Error("AGENT_PRIVATE_KEY not configured -- cannot send transactions");
+  }
+
+  const url = `${X402_SERVER_URL}/${endpoint}`;
+
+  // Step 1: Initial request -- expect a 402 Payment Required
+  const initialResponse = await fetch(url);
+
+  if (initialResponse.status !== 402) {
+    const data = await initialResponse.json();
+    return { data, paymentRequired: false };
+  }
+
+  // Step 2: Parse payment requirements from the 402 response
+  const paymentReqs = await initialResponse.json();
+  const paymentAmount =
+    paymentReqs.amount ?? paymentReqs.maxAmountRequired ?? 1000;
+  const paymentRecipient = (paymentReqs.recipient ??
+    paymentReqs.payTo) as `0x${string}`;
+
+  // Step 3: Build the payment header
+  const paymentHeader = btoa(
+    JSON.stringify({
+      from: agentAddress,
+      amount: paymentAmount,
+      to: paymentRecipient,
+      tripId: Number(tripId),
+      timestamp: Date.now(),
+    })
+  );
+
+  // Step 4: Record the nanopayment on-chain
+  const amountBigInt = BigInt(paymentAmount);
+  const hash = await walletClient.writeContract({
+    address: treasuryAddr,
+    abi: GROUP_TREASURY_ABI,
+    functionName: "nanopayment",
+    args: [tripId, paymentRecipient, amountBigInt, category, descriptionText],
+  });
+
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
+
+  // Step 5: Retry with payment header
+  const paidResponse = await fetch(url, {
+    headers: { "X-PAYMENT": paymentHeader },
+  });
+  const data = await paidResponse.json();
+
+  return {
+    data,
+    paymentRequired: true,
+    txHash: hash,
+    blockNumber: Number(receipt.blockNumber),
+    amountRaw: paymentAmount,
+    amountUsd: formatUnits(amountBigInt, 6),
+    recipient: paymentRecipient,
+  };
+}
+
 // --- MCP Server ---
 const server = new Server(
   { name: "trip-treasury", version: "2.0.0" },
@@ -166,6 +250,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
               "restaurants",
               "weather",
               "route-optimization",
+              "book-hotel",
+              "pay-toll",
             ],
             description: "The x402 data endpoint to query",
           },
@@ -231,6 +317,46 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           },
         },
         required: ["vote_id"],
+      },
+    },
+    {
+      name: "book_hotel",
+      description:
+        "Book a hotel and pay from the trip treasury. Handles the full flow: pays the booking API via x402 nanopayment, then records the hotel payment on-chain. Returns booking confirmation + payment tx hash.",
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          trip_id: { type: "number" as const, description: "Trip ID" },
+          hotel_name: {
+            type: "string" as const,
+            description: "Name of the hotel to book",
+          },
+          price_usd: {
+            type: "number" as const,
+            description: "Hotel price in USD",
+          },
+        },
+        required: ["trip_id", "price_usd"],
+      },
+    },
+    {
+      name: "pay_toll",
+      description:
+        "Pay a highway toll autonomously via nanopayment. Handles the x402 toll payment flow and records the toll on-chain. No approval needed.",
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          trip_id: { type: "number" as const, description: "Trip ID" },
+          toll_amount_usd: {
+            type: "number" as const,
+            description: "Toll amount in USD (e.g. 2.60)",
+          },
+          route_description: {
+            type: "string" as const,
+            description: "Route description (e.g. 'A8 Nice → Cannes')",
+          },
+        },
+        required: ["trip_id", "toll_amount_usd"],
       },
     },
   ],
@@ -470,86 +596,16 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
     // x402_data_request
     // ----------------------------------------------------------------
     if (name === "x402_data_request") {
-      if (!walletClient) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: "Error: AGENT_PRIVATE_KEY not configured -- cannot send transactions",
-            },
-          ],
-          isError: true,
-        };
-      }
-
       const tripId = BigInt(args!.trip_id as number);
       const endpoint = args!.endpoint as string;
-      const url = `${X402_SERVER_URL}/${endpoint}`;
 
-      // Step 1: Initial request -- expect a 402 Payment Required
-      const initialResponse = await fetch(url);
-
-      if (initialResponse.status !== 402) {
-        // If the server did not require payment, return data directly
-        const data = await initialResponse.json();
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(
-                {
-                  success: true,
-                  endpoint,
-                  payment_required: false,
-                  data,
-                },
-                null,
-                2
-              ),
-            },
-          ],
-        };
-      }
-
-      // Step 2: Parse payment requirements from the 402 response
-      const paymentReqs = await initialResponse.json();
-      const paymentAmount = paymentReqs.amount ?? paymentReqs.maxAmountRequired ?? 1000; // amount in smallest unit (e.g., 1000 = $0.001)
-      const paymentRecipient =
-        (paymentReqs.recipient ?? paymentReqs.payTo) as `0x${string}`;
-
-      // Step 3: Build the payment header
-      const paymentHeader = btoa(
-        JSON.stringify({
-          agent: agentAddress,
-          amount: paymentAmount,
-          recipient: paymentRecipient,
-          tripId: Number(tripId),
-          timestamp: Date.now(),
-        })
+      const result = await x402Flow(
+        tripId,
+        endpoint,
+        "data",
+        `x402: ${endpoint}`,
+        addr
       );
-
-      // Step 4: Record the nanopayment on-chain
-      const amountBigInt = BigInt(paymentAmount);
-      const hash = await walletClient.writeContract({
-        address: addr,
-        abi: GROUP_TREASURY_ABI,
-        functionName: "nanopayment",
-        args: [
-          tripId,
-          paymentRecipient,
-          amountBigInt,
-          "data",
-          `x402: ${endpoint}`,
-        ],
-      });
-
-      const receipt = await publicClient.waitForTransactionReceipt({ hash });
-
-      // Step 5: Retry with payment header
-      const paidResponse = await fetch(url, {
-        headers: { "X-PAYMENT": paymentHeader },
-      });
-      const data = await paidResponse.json();
 
       return {
         content: [
@@ -559,15 +615,19 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
               {
                 success: true,
                 endpoint,
-                payment_required: true,
-                payment: {
-                  tx_hash: hash,
-                  block_number: Number(receipt.blockNumber),
-                  amount_raw: paymentAmount,
-                  amount_usd: formatUnits(amountBigInt, 6),
-                  recipient: paymentRecipient,
-                },
-                data,
+                payment_required: result.paymentRequired,
+                ...(result.paymentRequired
+                  ? {
+                      payment: {
+                        tx_hash: result.txHash,
+                        block_number: result.blockNumber,
+                        amount_raw: result.amountRaw,
+                        amount_usd: result.amountUsd,
+                        recipient: result.recipient,
+                      },
+                    }
+                  : {}),
+                data: result.data,
               },
               null,
               2
@@ -715,7 +775,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         args: [voteId],
       })) as [bigint, `0x${string}`, bigint, string, string, bigint, bigint, boolean];
 
-      const [tripId, recipient, amount, category, description, threshold, voteCount, executed] =
+      const [tripId, recipient, amount, category, description, voteCount, threshold, executed] =
         result;
 
       return {
@@ -738,6 +798,131 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
                   : Number(voteCount) >= Number(threshold)
                     ? "ready_to_execute"
                     : "pending",
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    }
+
+    // ----------------------------------------------------------------
+    // book_hotel
+    // ----------------------------------------------------------------
+    if (name === "book_hotel") {
+      const tripId = BigInt(args!.trip_id as number);
+      const hotelName = (args!.hotel_name as string) ?? "Hotel";
+      const priceUsd = args!.price_usd as number;
+
+      // Step 1: x402 flow for the booking API
+      const x402Result = await x402Flow(
+        tripId,
+        "book-hotel",
+        "lodging",
+        `x402: book-hotel (${hotelName})`,
+        addr
+      );
+
+      // Step 2: Record the hotel spend on-chain via spend()
+      if (!walletClient) {
+        throw new Error(
+          "AGENT_PRIVATE_KEY not configured -- cannot send transactions"
+        );
+      }
+      const spendAmount = parseUnits(String(priceUsd), 6);
+      const spendHash = await walletClient.writeContract({
+        address: addr,
+        abi: GROUP_TREASURY_ABI,
+        functionName: "spend",
+        args: [
+          tripId,
+          x402Result.recipient ?? agentAddress!,
+          spendAmount,
+          "lodging",
+          `Hotel booking: ${hotelName}`,
+        ],
+      });
+      const spendReceipt = await publicClient.waitForTransactionReceipt({
+        hash: spendHash,
+      });
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              {
+                success: true,
+                booking: x402Result.data,
+                payment: {
+                  tx_hash: spendHash,
+                  block_number: Number(spendReceipt.blockNumber),
+                  amount_usd: priceUsd,
+                },
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    }
+
+    // ----------------------------------------------------------------
+    // pay_toll
+    // ----------------------------------------------------------------
+    if (name === "pay_toll") {
+      const tripId = BigInt(args!.trip_id as number);
+      const tollAmountUsd = args!.toll_amount_usd as number;
+      const routeDescription =
+        (args!.route_description as string) ?? "toll road";
+
+      // Step 1: x402 flow for the toll payment API
+      const x402Result = await x402Flow(
+        tripId,
+        "pay-toll",
+        "tolls",
+        `x402: pay-toll (${routeDescription})`,
+        addr
+      );
+
+      // Step 2: Record the toll via nanopayment on-chain
+      if (!walletClient) {
+        throw new Error(
+          "AGENT_PRIVATE_KEY not configured -- cannot send transactions"
+        );
+      }
+      const tollAmount = parseUnits(String(tollAmountUsd), 6);
+      const tollHash = await walletClient.writeContract({
+        address: addr,
+        abi: GROUP_TREASURY_ABI,
+        functionName: "nanopayment",
+        args: [
+          tripId,
+          x402Result.recipient ?? agentAddress!,
+          tollAmount,
+          "tolls",
+          `Toll: ${routeDescription}`,
+        ],
+      });
+      const tollReceipt = await publicClient.waitForTransactionReceipt({
+        hash: tollHash,
+      });
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              {
+                success: true,
+                toll_receipt: x402Result.data,
+                payment: {
+                  tx_hash: tollHash,
+                  block_number: Number(tollReceipt.blockNumber),
+                  amount_usd: tollAmountUsd,
+                },
               },
               null,
               2

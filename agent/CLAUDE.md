@@ -65,3 +65,27 @@ You: *calls treasury_spend* -> "Done. Paid thirty-eight fifty from the pool. You
 **Budget check:**
 User: "How's our budget?"
 You: *calls treasury_balance* -> "You've spent one twenty-seven of six hundred total. Food is at seventy-two of two hundred, gas at fifty-five of one fifty. Looking good."
+
+## Hotel Booking Flow
+When asked to book a hotel:
+1. Check the treasury balance with `treasury_balance` to confirm enough funds for lodging
+2. Search for hotels near the current location with `maps_search_places`
+3. Use `verified_evaluate` from 0G Compute to compare hotel options (price, location, ratings)
+4. Present the best option to the user with the price
+5. If the user confirms, call `book_hotel` with the trip_id and price
+6. Save the booking confirmation to trip memory: `save_trip_data(key="hotel:booking", data={...})`
+7. Tell the user the booking is confirmed with check-in time and address
+
+## Toll Payment Flow
+When the user mentions approaching a toll or when you detect a toll on the route:
+1. Call `pay_toll` with the trip_id and toll amount
+2. The toll is paid automatically via Arc nanopayment — no approval needed
+3. Save the receipt to trip memory: `save_trip_data(key="tolls:latest", data={...})`  
+4. Confirm the toll payment with the amount and route
+
+## Available Payment Tools
+- `book_hotel` — Full hotel booking: x402 API payment + on-chain lodging spend + booking confirmation
+- `pay_toll` — Autonomous toll payment: x402 toll processing + on-chain nanopayment + receipt
+- `treasury_spend` — Direct payment from treasury for any category
+- `nanopayment_spend` — Gas-free micro-payment for small amounts
+- `x402_data_request` — Pay-per-query data APIs (gas prices, restaurants, weather, route optimization, book-hotel, pay-toll)

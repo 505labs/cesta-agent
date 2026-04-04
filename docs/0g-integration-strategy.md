@@ -3,7 +3,7 @@
 **Date:** 2026-04-03
 **Purpose:** Maximize 0G bounty eligibility ($15K total: $6K OpenClaw Agent + $6K DeFi + $3K Wildcard)
 **Primary Target:** Best OpenClaw Agent on 0G ($6K) — using Claude Code as "alternative Claw agent"
-**Status:** Research complete, integration architecture proposed
+**Status:** Implemented. See `docs/0G-README.md` for operational details (deployed addresses, working commands, test results).
 
 ---
 
@@ -148,7 +148,9 @@ Stream: trip:{tripId}
 - **Verifiable.** Every KV write produces a Merkle root hash and a transaction on 0G Chain. The trip history is tamper-proof.
 - **No server dependency.** We don't need to run a database. 0G IS the database.
 
-**Implementation — Trip Memory MCP Server:**
+> **ACTUAL IMPLEMENTATION NOTE:** The code below uses `KvClient` / `Batcher` / `streamDataBuilder.set()` — the native 0G KV API. The actual implementation in `mcp-servers/trip-memory/storage-0g.ts` diverged: it uses file-based upload via `MemData` (not the KV API), maintaining a local `hash-index.json` that maps `(tripId, key) → rootHash`. Data is retrieved by downloading files by content hash. The KV node config fields (`kvNodeUrl`, `flowContractAddress`) are vestigial.
+
+**Implementation — Trip Memory MCP Server (original plan, see note above):**
 
 ```typescript
 // trip-memory-mcp/src/index.ts
@@ -421,7 +423,9 @@ Future trip organizers can choose agents based on their track record — creatin
 **3. Transferable Intelligence**
 When an iNFT transfers, the encrypted metadata re-encrypts for the new owner via TEE oracle. The new owner gets a fully functional agent with all its accumulated knowledge, not just a token pointing to an API.
 
-**Implementation — iNFT Minting Flow:**
+> **ACTUAL IMPLEMENTATION NOTE:** We did NOT use the `0g-agent-nft` repo or its TEEVerifier/BeaconProxy stack. Instead, we built a simplified custom `AgentNFT.sol` — a standard ERC-721 with a custom `AgentMetadata` struct (name, metadataURI, descriptionURI) and no TEE oracle or re-encryption on transfer. See `contracts/src/AgentNFT.sol`. Deployed on 0G Galileo Testnet with `Deploy0G.s.sol` and `MintAgent.s.sol`.
+
+**Implementation — iNFT Minting Flow (original plan, see note above):**
 
 The reference implementation uses the `0g-agent-nft` repository:
 
@@ -517,7 +521,7 @@ contract AgentReputation {
     function rateAgent(uint256 agentTokenId, uint8 rating, string calldata comment) external {
         require(rating >= 1 && rating <= 5, "Rating must be 1-5");
         ratings[agentTokenId].push(TripRating({
-            tripId: currentTripId,
+            tripId: _tripId,
             rater: msg.sender,
             rating: rating,
             comment: comment,
@@ -574,7 +578,7 @@ When the agent writes trip state to 0G Storage, the DA layer guarantees that dat
 
 ---
 
-## Architecture: How 0G Layers Together with Arc and WalletConnect
+## Architecture: How 0G Layers Together with Arc
 
 ```
 +------------------------------------------------------------------+
@@ -597,7 +601,7 @@ When the agent writes trip state to 0G Storage, the DA layer guarantees that dat
             |                       |
             |  MCP Servers:         |
             |  -- google-maps          -> Places, directions, POIs
-            |  -- evm-mcp-server       -> Read blockchain state
+            |  -- 0g-compute           -> TEE-verified inference
             |  -- trip-treasury --------> GroupTreasury.sol on ARC
             |  -- trip-memory ----------> 0G Storage (KV + files)
             |  -- 0g-compute -----------> 0G Sealed Inference (TEE)

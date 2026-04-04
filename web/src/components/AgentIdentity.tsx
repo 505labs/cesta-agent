@@ -3,7 +3,7 @@
 import { useReadContract } from "wagmi";
 import { type Address } from "viem";
 
-// AgentNFT ABI (minimal for reading)
+// 0G Chain — AgentNFT ABI (minimal for reading)
 const AgentNFT_ABI = [
   {
     type: "function",
@@ -33,7 +33,7 @@ const AgentNFT_ABI = [
   },
 ] as const;
 
-// AgentReputation ABI (minimal for reading)
+// 0G Chain — AgentReputation ABI (minimal for reading)
 const AgentReputation_ABI = [
   {
     type: "function",
@@ -48,25 +48,53 @@ const AgentReputation_ABI = [
   },
 ] as const;
 
+// Arc — ERC-8004 IdentityRegistry ABI (minimal for reading)
+const ArcIdentityRegistry_ABI = [
+  {
+    type: "function",
+    name: "ownerOf",
+    inputs: [{ name: "tokenId", type: "uint256" }],
+    outputs: [{ name: "", type: "address" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "getAgentWallet",
+    inputs: [{ name: "agentId", type: "uint256" }],
+    outputs: [{ name: "", type: "address" }],
+    stateMutability: "view",
+  },
+] as const;
+
 interface AgentIdentityProps {
+  // 0G Chain identity
   agentNftAddress?: Address;
   reputationAddress?: Address;
   tokenId?: bigint;
+  // Arc ERC-8004 identity
+  arcIdentityAddress?: Address;
+  arcAgentId?: bigint;
 }
+
+const ARC_IDENTITY_REGISTRY = "0x8004A818BFB912233c491871b3d84c89A494BD9e" as Address;
 
 export default function AgentIdentity({
   agentNftAddress,
   reputationAddress,
   tokenId = 0n,
+  arcIdentityAddress = ARC_IDENTITY_REGISTRY,
+  arcAgentId,
 }: AgentIdentityProps) {
-  const hasContracts = agentNftAddress && reputationAddress;
+  const has0GContracts = agentNftAddress && reputationAddress;
+  const hasArcIdentity = !!arcAgentId;
 
+  // 0G Chain reads
   const { data: agentData } = useReadContract({
     address: agentNftAddress,
     abi: AgentNFT_ABI,
     functionName: "getAgent",
     args: [tokenId],
-    query: { enabled: !!hasContracts },
+    query: { enabled: !!has0GContracts },
   });
 
   const { data: stats } = useReadContract({
@@ -74,7 +102,16 @@ export default function AgentIdentity({
     abi: AgentReputation_ABI,
     functionName: "getAgentStats",
     args: [tokenId],
-    query: { enabled: !!hasContracts },
+    query: { enabled: !!has0GContracts },
+  });
+
+  // Arc ERC-8004 reads
+  const { data: arcOwner } = useReadContract({
+    address: arcIdentityAddress,
+    abi: ArcIdentityRegistry_ABI,
+    functionName: "ownerOf",
+    args: [arcAgentId!],
+    query: { enabled: hasArcIdentity },
   });
 
   const agent = agentData as any;
@@ -92,7 +129,7 @@ export default function AgentIdentity({
           <path d="M2 17l10 5 10-5" />
           <path d="M2 12l10 5 10-5" />
         </svg>
-        Agent iNFT
+        Agent Identity
       </h4>
 
       <div className="flex items-center gap-3 mb-3">
@@ -104,11 +141,30 @@ export default function AgentIdentity({
             {agent?.name || "RoadTrip Co-Pilot"}
           </p>
           <p className="text-xs text-[var(--text-secondary)] font-mono">
-            Token #{tokenId.toString()}
+            {has0GContracts ? `0G #${tokenId.toString()}` : ""}
+            {has0GContracts && hasArcIdentity ? " · " : ""}
+            {hasArcIdentity ? `Arc #${arcAgentId!.toString()}` : ""}
           </p>
         </div>
       </div>
 
+      {/* Identity badges */}
+      <div className="flex gap-2 mb-3">
+        {has0GContracts && (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-purple-500/20 text-purple-300 border border-purple-500/30">
+            <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
+            0G iNFT
+          </span>
+        )}
+        {hasArcIdentity && arcOwner && (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-500/20 text-blue-300 border border-blue-500/30">
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+            Arc ERC-8004
+          </span>
+        )}
+      </div>
+
+      {/* Stats from 0G reputation */}
       <div className="grid grid-cols-3 gap-2">
         <div className="text-center py-2 rounded-lg bg-[var(--bg-secondary)]">
           <p className="text-lg font-semibold" style={{ color: "var(--accent-amber)" }}>
@@ -130,9 +186,9 @@ export default function AgentIdentity({
         </div>
       </div>
 
-      {!hasContracts && (
+      {!has0GContracts && !hasArcIdentity && (
         <p className="text-xs text-[var(--text-secondary)] mt-2 text-center">
-          Deploy AgentNFT to 0G Chain to activate
+          Deploy AgentNFT to 0G Chain or register on Arc to activate
         </p>
       )}
     </div>

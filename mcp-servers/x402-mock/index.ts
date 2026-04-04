@@ -124,6 +124,39 @@ const ENDPOINTS: Record<string, EndpointConfig> = {
       fuel_estimate_eur: 3.1,
     }),
   },
+
+  "/book-hotel": {
+    price: "15000", // $0.015 USDC (6 decimals)
+    description: "Hotel booking confirmation service",
+    handler: () => ({
+      bookingId: "BK-" + Math.random().toString(36).slice(2, 8).toUpperCase(),
+      hotel: "Hotel de Cannes Riviera",
+      address: "123 Boulevard de la Croisette, 06400 Cannes, France",
+      roomType: "Deluxe Double",
+      pricePerNight: 245.0,
+      currency: "EUR",
+      checkIn: "2026-04-05T15:00:00Z",
+      checkOut: "2026-04-06T11:00:00Z",
+      status: "confirmed",
+      cancellationDeadline: "2026-04-04T23:59:59Z",
+    }),
+  },
+
+  "/pay-toll": {
+    price: "2000", // $0.002 USDC
+    description: "Autoroute toll payment processing",
+    handler: () => ({
+      tollId: "TOLL-" + Math.random().toString(36).slice(2, 8).toUpperCase(),
+      route: "A8 Nice → Cannes",
+      tollBooth: "Antibes Péage Nord",
+      amount: 2.60,
+      currency: "EUR",
+      status: "completed",
+      receipt: "RCP-" + new Date().toISOString().slice(0, 10).replace(/-/g, "") + "-" + Math.random().toString(36).slice(2, 5).toUpperCase(),
+      vehicleClass: "2 (car)",
+      timestamp: new Date().toISOString(),
+    }),
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -292,6 +325,8 @@ console.log(`
 ║    GET /restaurants         $0.005                    ║
 ║    GET /weather             $0.002                    ║
 ║    GET /route-optimization  $0.010                    ║
+║    GET /book-hotel          $0.015                    ║
+║    GET /pay-toll            $0.002                    ║
 ║    GET /health              free                      ║
 ║    GET /stats               free                      ║
 ╚══════════════════════════════════════════════════════╝

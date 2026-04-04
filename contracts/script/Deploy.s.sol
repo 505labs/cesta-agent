@@ -6,7 +6,8 @@ import {GroupTreasury} from "../src/GroupTreasury.sol";
 
 contract DeployTreasury is Script {
     function run() external {
-        vm.startBroadcast();
+        uint256 deployerKey = vm.envUint("PRIVATE_KEY");
+        vm.startBroadcast(deployerKey);
         GroupTreasury treasury = new GroupTreasury();
         vm.stopBroadcast();
         console.log("GroupTreasury deployed at:", address(treasury));

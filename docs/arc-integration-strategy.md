@@ -126,6 +126,8 @@ These nanopayments come out of the group treasury's "services" budget. The agent
 
 ### 2. ERC-8004 Agent Identity — Give the Agent a Verifiable On-Chain Identity
 
+> **ACTUAL IMPLEMENTATION:** We did NOT use Arc's ERC-8004 standard. Instead, we built custom `AgentNFT.sol` (ERC-7857 iNFT) and `AgentReputation.sol` contracts deployed on **0G Galileo Testnet**, with an `AgentIdentity.tsx` frontend component. The description below is the original Arc-native strategy that was replaced by our 0G-based approach.
+
 **What it is:** Arc has a native standard (ERC-8004) for registering AI agents on-chain with NFT-based identity, reputation tracking, and credential verification. This is unique to Arc — no other chain has this.
 
 **Arc ERC-8004 contracts (testnet):**
@@ -152,6 +154,8 @@ Our AI agent handles real money on behalf of a group of friends. Trust is the co
 ---
 
 ### 3. ERC-8183 Jobs Protocol — Native Escrow for Trip Settlement
+
+> **ACTUAL IMPLEMENTATION:** GroupTreasury.sol is a **standalone custom contract**, NOT an extension of ERC-8183. The conceptual mapping below is valid, but we wrote our own escrow logic rather than inheriting from Arc's native standard.
 
 **What it is:** Arc has a built-in standard (ERC-8183) for job marketplaces with escrow. It defines three roles: Client (creates and funds), Provider (executes and submits work), and Evaluator (reviews and releases funds). The contract holds USDC in escrow until work is evaluated.
 
@@ -181,6 +185,8 @@ Instead of writing a fully custom escrow contract from scratch, we can build our
 ---
 
 ### 4. Circle Programmable Wallets — MPC-Secured Agent Wallet
+
+> **ACTUAL IMPLEMENTATION:** The agent currently uses a raw `AGENT_PRIVATE_KEY` via viem's `privateKeyToAccount`. Circle Programmable Wallets exist only as a setup script (`scripts/setup-circle-wallet.ts`) — NOT as the live agent signer. The description below is the target architecture.
 
 **What it is:** Circle's Wallets-as-a-Service with MPC (Multi-Party Computation) key management. Developer-Controlled Wallets let an application manage wallets programmatically — create, fund, sign, and transact via API without ever handling raw private keys.
 
@@ -219,6 +225,8 @@ The trip-treasury MCP server wraps this — the agent calls `treasury_spend` and
 ---
 
 ### 5. CCTP V2 Fast Transfers + Hooks — Chain-Abstracted Deposits
+
+> **NOT YET IMPLEMENTED.** No CCTP code exists in the codebase. Deposits are direct ERC-20 transfers on the local chain. The `MultiChainDeposit.tsx` component lets users switch chains, but there's no actual cross-chain bridging.
 
 **What it is:** CCTP V2 is Circle's permissionless protocol for native USDC transfers across blockchains. It burns USDC on the source chain and mints it on the destination chain — no wrapped tokens, no liquidity pools. V2 adds Fast Transfers (8-20 seconds vs 15-19 minutes) and Hooks for post-transfer automation.
 
@@ -261,6 +269,8 @@ npm install @circle-fin/bridge-kit @circle-fin/adapter-circle-wallets
 
 ### 6. StableFX — On-Chain FX for Cross-Border Trips
 
+> **NOT YET IMPLEMENTED.** No StableFX or EURC code exists in the codebase.
+
 **What it is:** Arc's built-in FX engine with institutional-grade RFQ (Request for Quote) and atomic Payment-versus-Payment (PvP) settlement. Supports conversion between USDC, EURC, USYC, and Circle Partner Stablecoins.
 
 **Arc FxEscrow contract (testnet):** `0x867650F5eAe8df91445971f14d89fd84F0C9a9f8`
@@ -282,6 +292,8 @@ With StableFX:
 ---
 
 ### 7. Circle Paymaster — Sponsored Gas for Users
+
+> **NOT YET IMPLEMENTED.** No Paymaster integration exists in the codebase.
 
 **What it is:** Circle's Paymaster lets applications sponsor gas fees so end users never need to hold native tokens or worry about gas. Works with both ERC-4337 smart accounts and EIP-7702-enabled EOAs.
 
@@ -390,7 +402,7 @@ This is especially important for the demo: judges shouldn't have to think about 
 
 ### Agent Authority Model
 
-**Circle Programmable Wallets is the canonical agent signer.**
+**Agent signing:** Currently uses raw `AGENT_PRIVATE_KEY` via viem. Circle Programmable Wallets is the target architecture (setup script exists at `scripts/setup-circle-wallet.ts`).
 - MPC key security — no single point of failure, no raw key in Claude session
 - API-driven — agent calls Circle's API to sign, key never exists in memory
 - Arc-native — first-party integration, supports "ARC-TESTNET" as blockchain param

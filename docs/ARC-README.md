@@ -104,7 +104,7 @@ Three properties of Arc make it the right chain for an autonomous AI agent manag
 │  Functions:          │ │  GET /gas-prices│ │       arc.network   │
 │  - createTrip        │ │  GET /restaurants│ │  USDC: 0x3600...   │
 │  - deposit           │ │  GET /weather   │ │  Explorer:          │
-│  - spend             │ │  GET /route-opt │ │   testnet.arcscan.  │
+│  - spend             │ │  GET /route-opt*│ │   testnet.arcscan.  │
 │  - nanopayment       │ │                 │ │       app           │
 │  - requestVote       │ │  Returns 402    │ │                     │
 │  - castVote          │ │  with payment   │ │  Sub-second         │
@@ -144,14 +144,14 @@ This is the core of Track 3. Here's exactly what happens when the agent needs ga
    - description: "Gas prices API $0.003"
    → On-chain receipt emitted: NanopaymentProcessed event
 
-5. MCP tool creates X-PAYMENT header (base64 JSON with from, to, amount)
+5. MCP tool creates X-PAYMENT header (base64 JSON with from, to, amount, tripId, timestamp)
 
 6. HTTP GET http://localhost:4402/gas-prices + X-PAYMENT header
    → Server validates payment, responds: 200 OK
    {
      "stations": [
-       { "name": "Shell A8", "price_eur": 1.45, "distance_km": 2.1 },
-       { "name": "Total Nice", "price_eur": 1.52, "distance_km": 4.3 },
+       { "name": "Shell A8", "price_per_liter": 1.45, "distance_km": 2.1 },
+       { "name": "Total Nice", "price_per_liter": 1.52, "distance_km": 4.3 },
        ...
      ]
    }
@@ -240,7 +240,7 @@ When the agent wants to book a $220 hotel (over the $100 auto-limit):
 
 **File:** `mcp-servers/x402-mock/index.ts` (300 lines)
 **Port:** 4402
-**Tests:** 24/24 pass in `mcp-servers/x402-mock/index.test.ts`
+**Tests:** 18/18 pass in `mcp-servers/x402-mock/index.test.ts`
 
 This simulates a real x402-compliant API marketplace. In production, these would be third-party services (gas price aggregators, restaurant APIs, weather providers) that accept nanopayments via the x402 protocol. For the hackathon demo, we run our own server with realistic mock data.
 
@@ -355,15 +355,12 @@ cd contracts && forge script script/IntegrationTest.s.sol:IntegrationTest \
 
 This script deploys everything and runs a complete demo scenario:
 1. Deploys GroupTreasury + MockUSDC
-2. Creates trip with $100 spend limit, $500 daily cap, category budgets ($200 food, $150 gas, $1 data, $50 tolls)
-3. Three depositors add $200 each → $600 pool
+2. Creates trip with $100 spend limit, $500 daily cap, category budgets ($200 food, $1 data, $50 tolls)
+3. Single deployer deposits $600 into the pool
 4. Agent makes 3 nanopayments for data APIs ($0.003 + $0.005 + $0.002 = $0.01)
 5. Agent pays toll ($4.50) and parking ($6.00) via nanopayment
 6. Agent spends $38.50 on food (regular spend, under limit)
-7. Agent requests group vote for $180 hotel (over $100 limit)
-8. 2 members approve, agent executes
-9. Verifies: nanopaymentTotal = $10.51, food budget spent = $38.50
-10. Settles trip, checks proportional returns
+7. Logs nanopaymentTotal = $10.51, food budget spent = $38.50
 
 Output:
 ```
@@ -431,13 +428,15 @@ Or view on the explorer: [testnet.arcscan.app/address/0x8AdC5Db1e62E5553E0e0B811
 
 Listed in priority order — highest impact first.
 
-### 1. ERC-8004 Agent Identity (High Impact)
+### 1. ERC-8004 Agent Identity on Arc (Medium Impact)
 
 Arc has native contracts for AI agent identity:
 - `IdentityRegistry` at `0x8004A818BFB912233c491871b3d84c89A494BD9e`
 - `ReputationRegistry` at `0x8004B663056A597Dffe9eCcC1965A193B7388713`
 
-We could register our agent on-chain with metadata (name, version, capabilities) and reference its NFT ID in the GroupTreasury contract. This adds a "trust layer" narrative: the agent has a verifiable on-chain identity and reputation score.
+We could additionally register our agent on Arc's native registry for deeper Arc integration.
+
+> **Note:** Custom `AgentNFT.sol` (ERC-7857 iNFT) and `AgentReputation.sol` contracts are already deployed on **0G Galileo Testnet**, with the `AgentIdentity.tsx` frontend component wired up. The Arc-native ERC-8004 registration would be complementary to this existing 0G-based identity.
 
 **Effort:** ~1-2 hours. Call `IdentityRegistry.register(metadataURI)` with agent metadata on IPFS.
 

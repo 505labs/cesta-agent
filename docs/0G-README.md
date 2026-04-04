@@ -1,332 +1,220 @@
 # 0G Integration — RoadTrip Co-Pilot
 
-## Deployed Contract Addresses (0G Galileo Testnet, Chain ID: 16602)
+## The Big Picture
 
-| Contract | Address | Explorer |
-|----------|---------|----------|
-| **AgentNFT** | `0x8adc5db1e62e5553e0e0b811f3c512b0a9e140ba` | [View](https://chainscan-galileo.0g.ai/address/0x8adc5db1e62e5553e0e0b811f3c512b0a9e140ba) |
-| **AgentReputation** | `0xaf421c7fad3a550a7da7478b05df9f6b0611c14a` | [View](https://chainscan-galileo.0g.ai/address/0xaf421c7fad3a550a7da7478b05df9f6b0611c14a) |
-| **TripRegistry** | `0x2e9f481d1c2f0b7f5d922e9036dd9e751e2d78d5` | [View](https://chainscan-galileo.0g.ai/address/0x2e9f481d1c2f0b7f5d922e9036dd9e751e2d78d5) |
+Our app has two blockchains doing two different jobs:
+- **Arc** = the wallet. Holds USDC, pays for things.
+- **0G** = the brain. Stores memory, verifies decisions, owns the agent's identity.
+
+The AI agent (Claude Code) sits in the middle with MCP tool servers connecting it to both chains. When someone says "find us lunch," Claude reasons about options, asks 0G Compute to verify its recommendation inside a hardware enclave, stores the trip state to 0G Storage, and pays from the Arc treasury.
+
+```
+                    Claude Code Agent (tmux)
+                           |
+              +------------+------------+
+              |            |            |
+         0G Storage   0G Compute   Arc Treasury
+         (memory)    (verified AI)  (USDC payments)
+              |            |            |
+         0G Chain ----+    |     Arc Chain
+         (identity,   |    |
+          reputation)  +---+
+```
+
+## What's Deployed & Working
+
+### Contracts on 0G Galileo Testnet (Chain ID: 16602)
+
+| Contract | Address | What it does |
+|----------|---------|--------------|
+| **AgentNFT** | [`0x8adc...40ba`](https://chainscan-galileo.0g.ai/address/0x8adc5db1e62e5553e0e0b811f3c512b0a9e140ba) | ERC-7857 iNFT — the agent is a token. Token #0 minted. |
+| **AgentReputation** | [`0xaf42...14a`](https://chainscan-galileo.0g.ai/address/0xaf421c7fad3a550a7da7478b05df9f6b0611c14a) | 1-5 star ratings per trip. Currently 4.50 avg from 2 ratings. |
+| **TripRegistry** | [`0x2e9f...8d5`](https://chainscan-galileo.0g.ai/address/0x2e9f481d1c2f0b7f5d922e9036dd9e751e2d78d5) | Links trips to agent iNFTs and 0G Storage hashes. 2 trips registered. |
 
 **Agent Wallet:** `0xabD736bB59DFA66a5a2ec92519142A6A37FC5805`
 
----
+### 0G Storage (Trip Memory MCP)
 
-## What We've Implemented
+Every piece of trip data gets uploaded to 0G's decentralized storage network as a content-addressed file. Upload returns a Merkle root hash — a permanent, verifiable pointer to that exact data across hundreds of storage nodes.
 
-### 1. Smart Contracts on 0G Chain (Galileo Testnet)
+The MCP server wraps this as simple tools the agent calls naturally. Available tools: `save_trip_data`, `load_trip_data`, `list_trip_keys`, `save_trip_file`, `load_trip_file`, `storage_status`.
 
-**AgentNFT.sol** — Simplified ERC-7857 iNFT for AI Agent Identity
-- Mints AI agents as NFTs with encrypted metadata stored on 0G Storage
-- Each token stores: agent name, metadata URI (0G Storage root hash), description URI, creator address
-- Supports transfer with metadata preservation — new owners can re-encrypt metadata
-- Declares ERC-7857 interface support via ERC-165
-- 12 Foundry tests
-
-**AgentReputation.sol** — On-chain Reputation System
-- Trip members rate agents 1-5 after trips with text comments
-- Prevents double-rating (same rater, same trip)
-- Tracks aggregate stats: total score, total ratings, total trips
-- `getAverageRating()` returns score scaled to 2 decimal places (e.g., 450 = 4.50)
-- `getAgentStats()` returns all stats in a single call
-- 14 Foundry tests
-
-**TripRegistry.sol** — Trip Lifecycle Registry
-- Links each trip to: agent iNFT token ID, organizer, 0G Storage stream ID
-- Records trip creation, itinerary updates (hash of itinerary on 0G Storage), and trip completion
-- Tracks all trips per agent for reputation/history lookups
-- Only organizer can update itinerary or end trip
-- 14 Foundry tests
-
-### 2. 0G Storage — Trip Memory MCP Server (v2.0)
-
-The `mcp-servers/trip-memory` MCP server was rewritten to use 0G decentralized storage as the primary backend with local filesystem as graceful fallback.
-
-**How it works:**
-- **KV Store** (`@0glabs/0g-ts-sdk`): Structured trip data (preferences, itinerary, spending state, conversation history) stored as key-value pairs in 0G's decentralized KV store. Each trip gets a deterministic stream ID derived from `keccak256("roadtrip-copilot:trip:{tripId}")`.
-- **File Storage**: Trip artifacts (photos, receipts, reports) uploaded to 0G's content-addressed file storage, returning a permanent root hash.
-- **Local Fallback**: When 0G is unavailable (no tokens, network down), all operations transparently fall back to local JSON files. Data is always cached locally regardless.
-
-**MCP Tools:**
-| Tool | Description |
-|------|-------------|
-| `save_trip_data` | Write structured data to 0G KV store (or local) |
-| `load_trip_data` | Read structured data from 0G KV store (or local) |
-| `list_trip_keys` | List all saved data keys for a trip |
-| `save_trip_file` | Upload a file to 0G decentralized storage |
-| `load_trip_file` | Download a file by 0G root hash |
-| `storage_status` | Check connection mode (0g/local) |
-
-### 3. 0G Compute — Verified Inference MCP Server
-
-New `mcp-servers/0g-compute` MCP server provides TEE-verified AI inference via 0G Compute Network.
-
-**How it works:**
-- Uses `@0glabs/0g-serving-broker` to connect to 0G Compute providers running models inside Trusted Execution Environments (Intel TDX + NVIDIA H100/H200 in TEE mode)
-- Auto-discovers the best available chatbot provider
-- Every inference response is cryptographically signed by the TEE enclave
-- Response verification via `processResponse()` confirms: the specific model processed the query, input was not tampered with, output was not modified
-- Graceful fallback when no providers are available — returns a message telling the agent to use its own reasoning
-
-**MCP Tools:**
-| Tool | Description |
-|------|-------------|
-| `verified_evaluate` | Run TEE-verified inference for spending decisions |
-| `list_providers` | List available 0G Compute providers and models |
-| `compute_status` | Check connection mode (0g/fallback) |
-
-### 4. Frontend Components
-
-**ZeroGStatus** — Shows real-time 0G infrastructure connection status (Storage, Compute, Chain) with animated status indicators.
-
-**AgentIdentity** — Displays the agent's iNFT identity card: name, token ID, reputation stats (average rating, number of reviews, trips completed). Reads directly from the deployed AgentNFT and AgentReputation contracts.
-
-Both are integrated into the trip dashboard page right column.
-
----
-
-## What Still Needs to Be Implemented
-
-### Must-Do Before Submission
-1. **Mint the agent as an iNFT** — Upload character.json and description to 0G Storage, then call `mintAgent()` on the AgentNFT contract. Script ready: `contracts/script/MintAgent.s.sol`.
-2. **Fund the agent wallet** with enough 0G tokens for Storage writes and Compute inference (minimum ~5 0G for all operations).
-3. **Test 0G Storage end-to-end** — With funded wallet, verify KV write/read cycle on testnet.
-4. **Set .env vars** — Update `web/.env.example` values with deployed contract addresses.
-
-### Should-Do (Strengthens Bounty Case)
-5. **0G Compute demo** — Show a live verified inference call for a spending recommendation. Requires: ledger creation (3 0G), provider acknowledgement, fund transfer to provider sub-account (1 0G).
-6. **Register a trip on TripRegistry** — After creating a trip on the treasury, also register it on 0G Chain with the agent's iNFT token ID.
-7. **Agent reputation demo** — After a trip ends, show members rating the agent and the on-chain stats updating.
-
-### Nice-to-Have (Wow Factor)
-8. **Cross-session memory demo** — Kill the agent, restart it, show it loading state from 0G Storage.
-9. **Store inference receipts** — After each verified_evaluate call, store the signed result to 0G Storage as a receipt.
-10. **Demo video** — 3-minute video showing the full flow: mint agent, create trip, voice interaction, verified spend, check reputation.
-
----
-
-## How This Qualifies for 0G Sponsor Tracks
-
-### Track 1: Best OpenClaw Agent on 0G — $6,000 (PRIMARY TARGET)
-
-> "Build applications integrating OpenClaw or **alternative Claw agents** with 0G's decentralized infrastructure."
-
-**Why we qualify:**
-
-| Requirement | Our Implementation |
-|-------------|--------------------|
-| Agent framework | Claude Code as "alternative Claw agent" — a persistent AI agent running in tmux with MCP tool servers. Superior reasoning to OpenClaw's routing-layer approach. |
-| 0G Storage for memory | Trip Memory MCP uses 0G KV Store for structured trip state and 0G File Storage for artifacts. The agent's persistent brain. |
-| 0G Compute for inference | Verified Evaluate MCP routes spending decisions through TEE-sealed inference. Cryptographically proves AI recommendations are genuine. |
-| 0G Chain for on-chain actions | AgentNFT (ERC-7857), AgentReputation, and TripRegistry contracts deployed on Galileo. |
-| iNFT for agent ownership | Agent identity minted as ERC-7857 iNFT with encrypted metadata on 0G Storage. |
-
-**The pitch:** "We gave a car a wallet AND a brain. The wallet lives on Arc (USDC treasury). The brain lives on 0G (persistent memory, verifiable reasoning, tokenized identity). Claude Code is our agent framework — it reasons about budgets, navigates routes, and makes autonomous spending decisions. Every recommendation is TEE-verified via 0G Compute. Every piece of trip data persists on 0G Storage. The agent itself is an iNFT — ownable, reputable, tradeable."
-
-### Track 3: Wildcard on 0G — $3,000 (SECONDARY TARGET)
-
-The dual-chain architecture (Arc for finance + 0G for agent intelligence) is genuinely novel and doesn't fit neatly into either agent-only or DeFi-only categories. Voice-first interface is unusual for blockchain apps.
-
----
-
-## How to Run & Test Everything
-
-### Prerequisites
-
-- [Foundry](https://getfoundry.sh/) (forge, cast, anvil)
-- [Bun](https://bun.sh/) >= 1.0
-- [Node.js](https://nodejs.org/) >= 20
-- 0G testnet tokens in the agent wallet (https://faucet.0g.ai)
-
-### 1. Run All Tests (Local, No Tokens Needed)
-
-```bash
-# Solidity contracts — 54 tests
-cd contracts && forge test -vv
-
-# Trip Memory MCP — 8 tests
-cd mcp-servers/trip-memory && bun test
-
-# 0G Compute MCP — 4 tests
-cd mcp-servers/0g-compute && bun test
-
-# Web frontend — verify build
-cd web && npm install && npx next build
+```
+Agent: save_trip_data(trip_id=1, key="preferences", data={dietary: ["vegetarian"], budget: "moderate"})
+  → Uploads JSON to 0G Storage
+  → Returns root hash 0x9e8a33...
+  → Also cached locally as fallback
+  → Verifiable at storagescan-galileo.0g.ai
 ```
 
-### 2. Test Contracts on Galileo Testnet
+Falls back to local JSON files transparently when 0G is unavailable. Uses `@0gfoundation/0g-ts-sdk@1.2.1`.
+
+### 0G Compute (Verified Inference MCP)
+
+When the agent makes a spending recommendation, it routes the evaluation through 0G Compute — a GPU running whichever TEE-verified model the 0G Compute network provides (dynamically selected at runtime) inside a Trusted Execution Environment (hardware enclave). The response comes back cryptographically signed, proving the model actually produced that output untampered.
+
+```
+Agent: verified_evaluate("Compare: Station A $3.20 vs Station B $2.89")
+  → Sent to 0G Compute provider (TEE-sealed GPU)
+  → Response: "Station B is cheaper..." 
+  → TEE Verified: true
+  → Chat ID: chatcmpl-bff1f1b8... (on-chain proof)
+```
+
+Falls back to telling Claude to use its own reasoning when providers are down. Available tools: `verified_evaluate`, `list_providers`, `compute_status`. Uses `@0glabs/0g-serving-broker@0.7.4`.
+
+### Frontend
+
+Two minimal components on the trip dashboard:
+- **AgentIdentity** — shows the iNFT card (name, token ID, rating, trip count)
+- **ZeroGStatus** — shows connection status for Storage, Compute, and Chain
+
+---
+
+## How It Qualifies for 0G Tracks
+
+### Track 1: Best OpenClaw Agent — $6,000
+
+The bounty says "OpenClaw **or alternative Claw agents**." Claude Code is our alternative — a persistent AI agent with MCP tools, not a chat routing framework. We use every 0G component they asked for:
+
+| They asked for | We built |
+|----------------|----------|
+| 0G Compute for inference | TEE-verified spending evaluations (proven working) |
+| 0G Storage for memory | Trip data as content-addressed files (proven working) |
+| 0G Chain for on-chain actions | 3 contracts deployed and live |
+| iNFTs (ERC-7857) for agent identity | Token #0 minted, agent is an on-chain asset |
+
+### Track 3: Wildcard — $3,000
+
+Dual-chain architecture (finance on Arc + intelligence on 0G) with a voice-first interface. Doesn't fit agent-only or DeFi-only categories.
+
+---
+
+## Testing & Usage
+
+### Run Tests (no tokens needed)
 
 ```bash
-# Set your private key
-export AGENT_PRIVATE_KEY=0x7309cec2d75f93a7c8327e200f964dc5ccf56e4eda8819ff1ffad9f424ad5f62
+cd contracts && forge test -vv          # 76 Solidity tests
+cd mcp-servers/trip-memory && bun test  # 8 tests
+cd mcp-servers/0g-compute && bun test   # 4 tests
+cd web && npm install && npx next build # frontend build check
+```
 
-# Verify contracts are deployed
-cast call 0x8adc5db1e62e5553e0e0b811f3c512b0a9e140ba "nextTokenId()" --rpc-url https://evmrpc-testnet.0g.ai
-cast call 0xaf421c7fad3a550a7da7478b05df9f6b0611c14a "totalTrips(uint256)(uint256)" 0 --rpc-url https://evmrpc-testnet.0g.ai
-cast call 0x2e9f481d1c2f0b7f5d922e9036dd9e751e2d78d5 "nextTripId()" --rpc-url https://evmrpc-testnet.0g.ai
+### Verify Deployed Contracts
 
-# NOTE: 0G Galileo requires --legacy --gas-price 4000000000 for transactions
+```bash
+export RPC=https://evmrpc-testnet.0g.ai
+export PK=0x7309cec2d75f93a7c8327e200f964dc5ccf56e4eda8819ff1ffad9f424ad5f62
 
-# Mint the agent as an iNFT (already done — token #0 exists)
+# Read agent iNFT
+cast call 0x8adc5db1e62e5553e0e0b811f3c512b0a9e140ba "getAgent(uint256)" 0 --rpc-url $RPC
+
+# Read reputation (returns: avgRating, numRatings, numTrips)
+cast call 0xaf421c7fad3a550a7da7478b05df9f6b0611c14a "getAgentStats(uint256)" 0 --rpc-url $RPC
+
+# Read trip registry
+cast call 0x2e9f481d1c2f0b7f5d922e9036dd9e751e2d78d5 "getTrip(uint256)" 0 --rpc-url $RPC
+```
+
+### Write to Contracts
+
+All writes on 0G Galileo need `--legacy --gas-price 4000000000`:
+
+```bash
+# Mint another agent
 cast send 0x8adc5db1e62e5553e0e0b811f3c512b0a9e140ba \
-  "mintAgent(string,string,string)" \
-  "RoadTrip Co-Pilot" "0g://agent-metadata" "0g://agent-description" \
-  --rpc-url https://evmrpc-testnet.0g.ai \
-  --private-key $AGENT_PRIVATE_KEY \
-  --legacy --gas-price 4000000000
+  "mintAgent(string,string,string)" "My Agent" "0g://meta" "0g://desc" \
+  --rpc-url $RPC --private-key $PK --legacy --gas-price 4000000000
 
-# Verify the mint
-cast call 0x8adc5db1e62e5553e0e0b811f3c512b0a9e140ba \
-  "getAgent(uint256)" 0 \
-  --rpc-url https://evmrpc-testnet.0g.ai
-
-# Register a trip on TripRegistry
+# Register a trip
 cast send 0x2e9f481d1c2f0b7f5d922e9036dd9e751e2d78d5 \
-  "registerTrip(uint256,string)" 0 "trip:1" \
-  --rpc-url https://evmrpc-testnet.0g.ai \
-  --private-key $AGENT_PRIVATE_KEY \
-  --legacy --gas-price 4000000000
+  "registerTrip(uint256,string)" 0 "trip:42" \
+  --rpc-url $RPC --private-key $PK --legacy --gas-price 4000000000
 
-# Verify trip registration
-cast call 0x2e9f481d1c2f0b7f5d922e9036dd9e751e2d78d5 \
-  "getTrip(uint256)" 0 \
-  --rpc-url https://evmrpc-testnet.0g.ai
-
-# Rate the agent after a trip
+# Rate an agent (1-5)
 cast send 0xaf421c7fad3a550a7da7478b05df9f6b0611c14a \
-  "rateAgent(uint256,uint256,uint8,string)" 0 0 5 "Excellent trip planning!" \
-  --rpc-url https://evmrpc-testnet.0g.ai \
-  --private-key $AGENT_PRIVATE_KEY \
-  --legacy --gas-price 4000000000
-
-# Check agent reputation stats
-# Returns: (avgRating, numRatings, numTrips) — e.g., (450, 2, 0) = 4.50 avg from 2 ratings
-cast call 0xaf421c7fad3a550a7da7478b05df9f6b0611c14a \
-  "getAgentStats(uint256)" 0 \
-  --rpc-url https://evmrpc-testnet.0g.ai
+  "rateAgent(uint256,uint256,uint8,string)" 0 42 5 "Great trip!" \
+  --rpc-url $RPC --private-key $PK --legacy --gas-price 4000000000
 ```
 
-### 3. Test 0G Storage MCP Server
+### Test 0G Storage (upload + download round-trip)
 
 ```bash
 cd mcp-servers/trip-memory
-
-# Test in local fallback mode (no tokens needed)
-OG_STORAGE_ENABLED=false bun index.ts
-# In another terminal, send MCP requests to stdin
-
-# Test with 0G Storage (needs funded wallet)
-AGENT_PRIVATE_KEY=0x7309cec2d75f93a7c8327e200f964dc5ccf56e4eda8819ff1ffad9f424ad5f62 \
-OG_STORAGE_ENABLED=true \
-bun index.ts
+# OG_STORAGE_ENABLED defaults to true (opt-out via =false), so setting =true is redundant but explicit
+AGENT_PRIVATE_KEY=$PK OG_STORAGE_ENABLED=true bun -e '
+import { ZeroGStorage } from "./storage-0g.ts";
+const s = new ZeroGStorage({
+  privateKey: process.env.AGENT_PRIVATE_KEY,
+  rpcUrl: "https://evmrpc-testnet.0g.ai",
+  indexerUrl: "https://indexer-storage-testnet-turbo.0g.ai",
+  kvNodeUrl: "", flowContractAddress: "",  // vestigial — kept for config compat, not used by current SDK
+});
+await s.initialize();
+const res = await s.kvSet(1, "test", { hello: "world" });
+console.log("Uploaded:", res.rootHash);
+const data = await s.kvGet(1, "test");
+console.log("Downloaded:", JSON.stringify(data));
+process.exit(0);
+'
 ```
 
-### 4. Set Up & Test 0G Compute
-
-0G Compute requires a funded ledger account (minimum 3 0G) plus a provider sub-account (1 0G).
+### Test 0G Compute (TEE-verified inference)
 
 ```bash
 cd mcp-servers/0g-compute
 
-# Step 1: Run the setup script (creates ledger + funds provider)
-# Requires >= 4 0G tokens in the agent wallet
-AGENT_PRIVATE_KEY=0x7309cec2d75f93a7c8327e200f964dc5ccf56e4eda8819ff1ffad9f424ad5f62 \
-bun setup.ts
+# One-time setup (needs >= 3 0G in wallet)
+AGENT_PRIVATE_KEY=$PK bun setup.ts
 
-# Step 2: Run setup with --test flag to also fire a test inference
-AGENT_PRIVATE_KEY=0x7309cec2d75f93a7c8327e200f964dc5ccf56e4eda8819ff1ffad9f424ad5f62 \
-bun setup.ts --test
+# Setup + fire a test inference
+AGENT_PRIVATE_KEY=$PK bun setup.ts --test
 
-# Step 3: Run the MCP server in fallback mode (no tokens needed)
-OG_COMPUTE_ENABLED=false bun index.ts
-
-# Step 4: Run the MCP server with 0G Compute (needs funded ledger)
-AGENT_PRIVATE_KEY=0x7309cec2d75f93a7c8327e200f964dc5ccf56e4eda8819ff1ffad9f424ad5f62 \
-OG_COMPUTE_ENABLED=true \
-bun index.ts
+# Run the MCP server
+AGENT_PRIVATE_KEY=$PK OG_COMPUTE_ENABLED=true bun index.ts
 ```
 
-### 5. Test Full Frontend
+### Run the Frontend
 
 ```bash
-cd web
-
-# Create .env.local with deployed addresses
-cat > .env.local << 'EOF'
-NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=your_project_id
-NEXT_PUBLIC_ORCHESTRATOR_URL=http://localhost:8080
-NEXT_PUBLIC_TREASURY_ADDRESS=0x0000000000000000000000000000000000000000
-NEXT_PUBLIC_USDC_ADDRESS=0x0000000000000000000000000000000000000000
-NEXT_PUBLIC_CHAIN_RPC_URL=http://127.0.0.1:8545
-NEXT_PUBLIC_AGENT_NFT_ADDRESS=0x8adc5db1e62e5553e0e0b811f3c512b0a9e140ba
-NEXT_PUBLIC_AGENT_REPUTATION_ADDRESS=0xaf421c7fad3a550a7da7478b05df9f6b0611c14a
-NEXT_PUBLIC_TRIP_REGISTRY_ADDRESS=0x2e9f481d1c2f0b7f5d922e9036dd9e751e2d78d5
-NEXT_PUBLIC_OG_STORAGE_MODE=0g
-NEXT_PUBLIC_OG_COMPUTE_MODE=0g
-NEXT_PUBLIC_OG_HAS_KEY=true
-EOF
-
-npm run dev
-# Visit http://localhost:3000/trip/0 to see 0G components
+cd web && npm run dev
+# Visit http://localhost:3000/trip/0
+# AgentIdentity and ZeroGStatus panels visible in right column
 ```
 
 ---
 
-## 0G Components Used
+## File Map
 
-| Component | What We Use It For | Implementation |
-|-----------|--------------------|----------------|
-| **0G Chain** | Agent identity (iNFT), reputation, trip registry | 3 Solidity contracts deployed on Galileo |
-| **0G Storage (KV)** | Structured trip state (preferences, itinerary, spending) | Trip Memory MCP Server v2 |
-| **0G Storage (Files)** | Trip artifacts (photos, receipts, reports) | Trip Memory MCP Server v2 |
-| **0G Compute** | TEE-verified spending recommendations | 0G Compute MCP Server |
-| **iNFT (ERC-7857)** | Agent as ownable on-chain asset with encrypted metadata | AgentNFT.sol |
+```
+contracts/src/
+  AgentNFT.sol            # ERC-7857 iNFT — agent as on-chain token
+  AgentReputation.sol     # Star ratings tied to iNFT token IDs
+  TripRegistry.sol        # Trip lifecycle linked to agent + 0G Storage
+contracts/script/
+  Deploy0G.s.sol          # Deploy all 3 to Galileo
+  MintAgent.s.sol         # Mint agent iNFT
 
----
+mcp-servers/trip-memory/
+  index.ts                # MCP server: save/load trip data
+  storage-0g.ts           # 0G Storage SDK wrapper (upload/download files)
+mcp-servers/0g-compute/
+  index.ts                # MCP server: verified_evaluate tool
+  compute-0g.ts           # 0G Compute broker wrapper
+  setup.ts                # One-time ledger + provider funding script
+
+web/src/components/
+  AgentIdentity.tsx       # iNFT card (name, rating, trips)
+  ZeroGStatus.tsx         # Storage/Compute/Chain status indicators
+```
 
 ## Testnet Reference
 
-| Parameter | Value |
-|-----------|-------|
-| Network | 0G-Galileo-Testnet |
+| | |
+|---|---|
 | Chain ID | `16602` |
-| RPC URL | `https://evmrpc-testnet.0g.ai` |
+| RPC | `https://evmrpc-testnet.0g.ai` |
 | Explorer | `https://chainscan-galileo.0g.ai` |
 | Storage Explorer | `https://storagescan-galileo.0g.ai` |
 | Faucet | `https://faucet.0g.ai` |
-| Storage Flow Contract | `0x22E03a6A89B950F1c82ec5e74F8eCa321a105296` |
-
----
-
-## File Structure
-
-```
-contracts/
-  src/
-    AgentNFT.sol           # ERC-7857 iNFT for agent identity
-    AgentReputation.sol     # On-chain rating system
-    TripRegistry.sol        # Trip lifecycle registry
-    GroupTreasury.sol       # USDC group treasury (Arc chain)
-  test/
-    AgentNFT.t.sol          # 12 tests
-    AgentReputation.t.sol   # 14 tests
-    TripRegistry.t.sol      # 14 tests
-    GroupTreasury.t.sol     # 14 tests
-  script/
-    Deploy0G.s.sol          # Deploy all 0G contracts
-    MintAgent.s.sol         # Mint agent as iNFT
-
-mcp-servers/
-  trip-memory/
-    index.ts                # MCP server (0G Storage + local fallback)
-    storage-0g.ts           # 0G Storage SDK wrapper
-    index.test.ts           # 8 tests
-  0g-compute/
-    index.ts                # MCP server (0G Compute + fallback)
-    compute-0g.ts           # 0G Compute SDK wrapper
-    index.test.ts           # 4 tests
-
-web/src/components/
-  ZeroGStatus.tsx           # 0G infrastructure status display
-  AgentIdentity.tsx         # Agent iNFT identity card
-```

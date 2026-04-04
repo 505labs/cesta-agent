@@ -83,13 +83,15 @@ export function ConnectButton() {
 }
 ```
 
+> **Note:** The actual `ConnectButton` in the codebase uses `<appkit-button />` — the Reown AppKit web component — not a custom hook-based wrapper. The `useAppKit` hook pattern shown above is provided for reference.
+
 ---
 
 ## What Reown AppKit Does NOT Do
 
 - **Payments.** All payments go through Arc (nanopayments for micro-tx, treasury contract for larger).
 - **Cross-chain bridging.** CCTP V2 handles USDC bridging to Arc. AppKit just connects the wallet.
-- **Agent transactions.** The agent uses Circle Programmable Wallets (MPC), not any WalletConnect SDK.
+- **Agent transactions.** The agent uses a private key via viem (with Circle Programmable Wallets as a future improvement), not any WalletConnect SDK.
 - **Group approval.** Approval is in-app (tap to approve), not a WalletConnect Pay flow.
 
 ---
@@ -98,7 +100,7 @@ export function ConnectButton() {
 
 - `@reown/appkit` — main AppKit SDK
 - `@reown/appkit-adapter-wagmi` — EVM adapter
-- `@reown/appkit-adapter-solana` — Solana adapter (if multi-chain needed)
+- `@reown/appkit-adapter-solana` — Solana adapter (actively configured with Phantom + Solflare)
 
 ## NPM Packages (Removed)
 
@@ -117,7 +119,7 @@ This is not a focus, but we qualify naturally:
 | Requirement | How We Meet It |
 |-------------|---------------|
 | Use Reown AppKit | Yes — wallet connection + auth |
-| 2+ chain ecosystems OR Reown Auth | Yes — EVM + Solana if configured, or just SIWE auth |
+| 2+ chain ecosystems OR Reown Auth | Yes — EVM + Solana (fully configured: `appkit.tsx` unconditionally imports SolanaAdapter with Phantom + Solflare) |
 | Working demo | Yes |
 | Public GitHub repo | Yes |
 

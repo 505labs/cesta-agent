@@ -72,6 +72,8 @@ describe("x402 Mock Server", () => {
       { path: "/restaurants", price: "5000", desc: "Restaurant recommendations along route" },
       { path: "/weather", price: "2000", desc: "Weather forecast for route" },
       { path: "/route-optimization", price: "10000", desc: "Optimized route calculation" },
+      { path: "/book-hotel", price: "15000", desc: "Hotel booking confirmation service" },
+      { path: "/pay-toll", price: "2000", desc: "Autoroute toll payment processing" },
     ];
 
     for (const ep of paidEndpoints) {
@@ -148,6 +150,32 @@ describe("x402 Mock Server", () => {
       expect(body.data.waypoints).toBeArray();
       expect(body.data.traffic_status).toBeString();
     });
+
+    test("/book-hotel returns data with valid payment", async () => {
+      const header = makePaymentHeader("/book-hotel", "15000", RECIPIENT);
+      const res = await fetch(`${BASE}/book-hotel`, {
+        headers: { "X-PAYMENT": header },
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.data).toBeDefined();
+      expect(body.data.bookingId).toBeString();
+      expect(body.data.hotel).toBe("Hotel de Cannes Riviera");
+      expect(body.payment.accepted).toBe(true);
+    });
+
+    test("/pay-toll returns data with valid payment", async () => {
+      const header = makePaymentHeader("/pay-toll", "2000", RECIPIENT);
+      const res = await fetch(`${BASE}/pay-toll`, {
+        headers: { "X-PAYMENT": header },
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.data).toBeDefined();
+      expect(body.data.tollId).toBeString();
+      expect(body.data.route).toBe("A8 Nice → Cannes");
+      expect(body.payment.accepted).toBe(true);
+    });
   });
 
   // 5. Stats endpoint tracks payments
@@ -223,6 +251,45 @@ describe("x402 Mock Server", () => {
       expect(waypoint).toHaveProperty("lat");
       expect(waypoint).toHaveProperty("lng");
       expect(waypoint).toHaveProperty("eta_min");
+    });
+
+    test("hotel booking has required structure", async () => {
+      const header = makePaymentHeader("/book-hotel", "15000", RECIPIENT);
+      const res = await fetch(`${BASE}/book-hotel`, {
+        headers: { "X-PAYMENT": header },
+      });
+      const body = await res.json();
+      expect(body.data).toHaveProperty("bookingId");
+      expect(body.data).toHaveProperty("hotel");
+      expect(body.data).toHaveProperty("address");
+      expect(body.data).toHaveProperty("roomType");
+      expect(body.data).toHaveProperty("pricePerNight");
+      expect(body.data).toHaveProperty("currency");
+      expect(body.data).toHaveProperty("checkIn");
+      expect(body.data).toHaveProperty("checkOut");
+      expect(body.data).toHaveProperty("status");
+      expect(body.data).toHaveProperty("cancellationDeadline");
+      expect(body.data.bookingId).toMatch(/^BK-[A-Z0-9]+$/);
+      expect(body.data.status).toBe("confirmed");
+    });
+
+    test("toll payment has required structure", async () => {
+      const header = makePaymentHeader("/pay-toll", "2000", RECIPIENT);
+      const res = await fetch(`${BASE}/pay-toll`, {
+        headers: { "X-PAYMENT": header },
+      });
+      const body = await res.json();
+      expect(body.data).toHaveProperty("tollId");
+      expect(body.data).toHaveProperty("route");
+      expect(body.data).toHaveProperty("tollBooth");
+      expect(body.data).toHaveProperty("amount");
+      expect(body.data).toHaveProperty("currency");
+      expect(body.data).toHaveProperty("status");
+      expect(body.data).toHaveProperty("receipt");
+      expect(body.data).toHaveProperty("vehicleClass");
+      expect(body.data).toHaveProperty("timestamp");
+      expect(body.data.tollId).toMatch(/^TOLL-[A-Z0-9]+$/);
+      expect(body.data.status).toBe("completed");
     });
   });
 

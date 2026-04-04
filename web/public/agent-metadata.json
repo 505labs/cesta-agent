@@ -1,0 +1,32 @@
+{
+  "name": "RoadTrip Co-Pilot",
+  "version": "1.0.0",
+  "description": "Voice-first AI agent for group road trips with shared USDC treasury on Arc. Autonomously manages trip expenses via nanopayments, books hotels, pays tolls, and tracks budgets.",
+  "capabilities": [
+    "voice_interaction",
+    "navigation",
+    "hotel_booking",
+    "toll_payment",
+    "budget_management",
+    "nanopayments",
+    "x402_data_access",
+    "trip_memory"
+  ],
+  "framework": "claude-code",
+  "model": "claude-sonnet-4-20250514",
+  "infrastructure": {
+    "payments": "arc-testnet",
+    "storage": "0g-network",
+    "compute": "0g-compute-tee",
+    "wallet_auth": "reown-appkit"
+  },
+  "treasury": {
+    "contract": "GroupTreasury.sol",
+    "chain": "arc-testnet",
+    "chainId": 5042002,
+    "features": ["nanopayments", "category_budgets", "daily_caps", "group_voting", "proportional_settlement"]
+  },
+  "sponsors": ["arc", "0g"],
+  "event": "ETHGlobal Cannes 2026",
+  "created": "2026-04-04"
+}
