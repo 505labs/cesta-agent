@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "tee-web-agent": {
+      "type": "stdio",
+      "command": "/Users/luka/.pyenv/versions/tee-agent/bin/python",
+      "args": [
+        "/Users/luka/Documents/GitHub/ethglobal/tee/packages/web-agent/mcp_server.py"
+      ],
+      "env": {}
+    }
+  }
+}

@@ -1,0 +1,33 @@
+version: "3.8"
+services:
+  extension-tee:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - TEE_SERVER_URL=${TEE_SERVER_URL}
+      - CHAIN=${CHAIN}
+      - ARC_WALLET_PRIVATE_KEY=${ARC_WALLET_PRIVATE_KEY}
+      - HEDERA_ACCOUNT_ID=${HEDERA_ACCOUNT_ID}
+      - HEDERA_PRIVATE_KEY=${HEDERA_PRIVATE_KEY}
+      - AGENT_PRIVATE_KEY=${AGENT_PRIVATE_KEY}
+    depends_on:
+      - redis
+
+  ext-proxy:
+    image: ghcr.io/flare-foundation/fcc-ext-proxy:latest
+    environment:
+      - LANGUAGE=python
+      - EXTENSION_ID=${EXTENSION_ID}
+      - COSTON2_RPC_URL=${COSTON2_RPC_URL:-https://coston2-api.flare.network/ext/C/rpc}
+      - COSTON2_WALLET_PRIVATE_KEY=${COSTON2_WALLET_PRIVATE_KEY}
+      - REDIS_URL=redis://redis:6379
+    ports:
+      - "6676:6676"
+    depends_on:
+      - extension-tee
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --save ""

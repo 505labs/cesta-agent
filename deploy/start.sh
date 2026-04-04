@@ -46,6 +46,30 @@ if ! curl -sf localhost:9001/health >/dev/null 2>&1; then
   exit 1
 fi
 
+# --- Start tee-server (local dev — move to TEE for production) ---
+TEE_SERVER_DIR="${ROADTRIP_DIR}/tee-server"
+if [ -d "$TEE_SERVER_DIR" ]; then
+  echo "Starting tee-server..."
+  if ! curl -sf localhost:3000/health >/dev/null 2>&1; then
+    (cd "$TEE_SERVER_DIR" && npm run dev > /tmp/tee-server.log 2>&1 &)
+    # Wait up to 10s for tee-server to become ready
+    for i in $(seq 1 10); do
+      sleep 1
+      if curl -sf localhost:3000/health >/dev/null 2>&1; then
+        echo "tee-server ready on port 3000"
+        break
+      fi
+      if [ "$i" -eq 10 ]; then
+        echo "Warning: tee-server did not start within 10s (check /tmp/tee-server.log)"
+      fi
+    done
+  else
+    echo "tee-server already running on port 3000"
+  fi
+else
+  echo "Warning: tee-server not found at $TEE_SERVER_DIR — card issuance will not work"
+fi
+
 # --- Set voice channel port (avoid conflict with superapp on 9000) ---
 export VOICE_CHANNEL_PORT="${VOICE_CHANNEL_PORT:-9002}"
 echo "Using voice channel port: $VOICE_CHANNEL_PORT"

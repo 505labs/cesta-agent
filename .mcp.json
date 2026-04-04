@@ -1,19 +1,20 @@
 {
   "mcpServers": {
-    "google-maps": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-google-maps"],
-      "env": {
-        "GOOGLE_MAPS_API_KEY": "${GOOGLE_MAPS_API_KEY}"
-      }
+    "x402-pay": {
+      "type": "stdio",
+      "command": "/Users/luka/.pyenv/versions/tee-agent/bin/python",
+      "args": ["mcp-servers/x402-pay/server.py"],
+      "env": {}
     },
-    "weather": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-weather"]
+    "tee-web-agent": {
+      "type": "stdio",
+      "command": "/Users/luka/.pyenv/versions/tee-agent/bin/python",
+      "args": ["mcp-servers/tee-web-agent/mcp_server.py"],
+      "env": {}
     },
     "treasury": {
       "command": "bun",
-      "args": ["../mcp-servers/treasury/index.ts"],
+      "args": ["mcp-servers/treasury/index.ts"],
       "env": {
         "RPC_URL": "${RPC_URL}",
         "TREASURY_ADDRESS": "${TREASURY_ADDRESS}",
@@ -23,7 +24,7 @@
     },
     "trip-memory": {
       "command": "bun",
-      "args": ["../mcp-servers/trip-memory/index.ts"],
+      "args": ["mcp-servers/trip-memory/index.ts"],
       "env": {
         "TRIP_MEMORY_DIR": "${TRIP_MEMORY_DIR}",
         "AGENT_PRIVATE_KEY": "${AGENT_PRIVATE_KEY}",
@@ -36,24 +37,19 @@
     },
     "0g-compute": {
       "command": "bun",
-      "args": ["../mcp-servers/0g-compute/index.ts"],
+      "args": ["mcp-servers/0g-compute/index.ts"],
       "env": {
         "AGENT_PRIVATE_KEY": "${AGENT_PRIVATE_KEY}",
         "OG_RPC_URL": "${OG_RPC_URL}",
         "OG_COMPUTE_ENABLED": "${OG_COMPUTE_ENABLED}"
       }
     },
-    "x402-pay": {
-      "type": "stdio",
-      "command": "/Users/luka/.pyenv/versions/tee-agent/bin/python",
-      "args": ["../mcp-servers/x402-pay/server.py"],
-      "env": {}
-    },
-    "tee-web-agent": {
-      "type": "stdio",
-      "command": "/Users/luka/.pyenv/versions/tee-agent/bin/python",
-      "args": ["../mcp-servers/tee-web-agent/mcp_server.py"],
-      "env": {}
+    "voice-channel": {
+      "command": "bun",
+      "args": ["voice-channel/server.ts"],
+      "env": {
+        "VOICE_CHANNEL_PORT": "${VOICE_CHANNEL_PORT}"
+      }
     }
   }
 }
