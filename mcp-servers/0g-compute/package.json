@@ -1,17 +1,17 @@
 {
-  "name": "trip-memory-mcp",
-  "version": "2.0.0",
+  "name": "0g-compute-mcp",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "start": "bun index.ts",
     "test": "bun test"
   },
   "dependencies": {
-    "@0glabs/0g-ts-sdk": "^0.3.3",
-    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@0glabs/0g-serving-broker": "^0.7.4",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "ethers": "6.13.1"
   },
   "devDependencies": {
-    "bun-types": "latest"
+    "@types/bun": "latest"
   }
 }

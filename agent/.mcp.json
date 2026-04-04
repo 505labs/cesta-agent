@@ -25,7 +25,22 @@
       "command": "bun",
       "args": ["../mcp-servers/trip-memory/index.ts"],
       "env": {
-        "TRIP_MEMORY_DIR": "${TRIP_MEMORY_DIR}"
+        "TRIP_MEMORY_DIR": "${TRIP_MEMORY_DIR}",
+        "AGENT_PRIVATE_KEY": "${AGENT_PRIVATE_KEY}",
+        "OG_STORAGE_ENABLED": "${OG_STORAGE_ENABLED}",
+        "OG_RPC_URL": "${OG_RPC_URL}",
+        "OG_INDEXER_URL": "${OG_INDEXER_URL}",
+        "OG_KV_NODE_URL": "${OG_KV_NODE_URL}",
+        "OG_FLOW_CONTRACT": "${OG_FLOW_CONTRACT}"
+      }
+    },
+    "0g-compute": {
+      "command": "bun",
+      "args": ["../mcp-servers/0g-compute/index.ts"],
+      "env": {
+        "AGENT_PRIVATE_KEY": "${AGENT_PRIVATE_KEY}",
+        "OG_RPC_URL": "${OG_RPC_URL}",
+        "OG_COMPUTE_ENABLED": "${OG_COMPUTE_ENABLED}"
       }
     }
   }

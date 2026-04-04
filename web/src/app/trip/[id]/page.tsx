@@ -7,6 +7,9 @@ import ConnectButton from "@/components/ConnectButton";
 import TreasuryDashboard from "@/components/TreasuryDashboard";
 import SpendingFeed from "@/components/SpendingFeed";
 import VoiceInterface from "@/components/VoiceInterface";
+import ZeroGStatus from "@/components/ZeroGStatus";
+import AgentIdentity from "@/components/AgentIdentity";
+import { type Address } from "viem";
 
 export default function TripPage() {
   const params = useParams();
@@ -16,6 +19,10 @@ export default function TripPage() {
 
   const tripId = BigInt(params.id as string);
   const tripIdStr = params.id as string;
+
+  // 0G contract addresses (set after deployment to 0G Galileo)
+  const agentNftAddress = process.env.NEXT_PUBLIC_AGENT_NFT_ADDRESS as Address | undefined;
+  const reputationAddress = process.env.NEXT_PUBLIC_AGENT_REPUTATION_ADDRESS as Address | undefined;
 
   if (!isConnected) {
     return (
@@ -111,26 +118,36 @@ export default function TripPage() {
             </div>
           </div>
 
-          {/* Right column: Voice Interface */}
-          <div className="lg:col-span-1">
-            <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="var(--accent-blue)"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                <line x1="12" x2="12" y1="19" y2="22" />
-              </svg>
-              Co-Pilot
-            </h2>
-            <VoiceInterface tripId={tripIdStr} token={token ?? undefined} />
+          {/* Right column: Voice Interface + 0G Status */}
+          <div className="lg:col-span-1 space-y-4">
+            <div>
+              <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="var(--accent-blue)"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                  <line x1="12" x2="12" y1="19" y2="22" />
+                </svg>
+                Co-Pilot
+              </h2>
+              <VoiceInterface tripId={tripIdStr} token={token ?? undefined} />
+            </div>
+
+            <AgentIdentity
+              agentNftAddress={agentNftAddress}
+              reputationAddress={reputationAddress}
+              tokenId={0n}
+            />
+
+            <ZeroGStatus />
           </div>
         </div>
       </div>
