@@ -208,9 +208,7 @@ async def voice_converse(
     detail_level: str = Form("standard"),
     authorization: str = Header(None),
 ):
-    wallet = get_wallet_from_request(authorization)
-    if not wallet:
-        raise HTTPException(status_code=401, detail="Not authenticated")
+    wallet = get_wallet_from_request(authorization) or "anonymous"
 
     base = voice_base_url()
     if not base:
@@ -252,9 +250,7 @@ async def voice_converse(
 
 @app.post("/v1/text/converse")
 async def text_converse(request: Request, authorization: str = Header(None)):
-    wallet = get_wallet_from_request(authorization)
-    if not wallet:
-        raise HTTPException(status_code=401, detail="Not authenticated")
+    wallet = get_wallet_from_request(authorization) or "anonymous"
 
     body = await request.json()
     text = body.get("text", "")
