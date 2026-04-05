@@ -18,11 +18,14 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.roadtrip.copilot.app.R
 import com.roadtrip.copilot.app.data.TreasuryReader
+import com.roadtrip.copilot.core.audio.AudioForegroundService
 import com.roadtrip.copilot.core.network.PaymentRepository
 import com.roadtrip.copilot.core.network.TripRepository
 import com.roadtrip.copilot.core.network.dto.PaymentInfo
 import com.roadtrip.copilot.core.network.dto.TripInfo
 import com.roadtrip.copilot.core.network.dto.TripMember
+import com.roadtrip.copilot.core.state.ConversationRepository
+import com.roadtrip.copilot.core.state.ConversationState
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import java.math.BigInteger
@@ -34,6 +37,7 @@ class TripDetailFragment : Fragment() {
     @Inject lateinit var tripRepository: TripRepository
     @Inject lateinit var paymentRepository: PaymentRepository
     @Inject lateinit var treasuryReader: TreasuryReader
+    @Inject lateinit var conversationRepository: ConversationRepository
 
     private lateinit var txtTripName: TextView
     private lateinit var txtOrganizer: TextView
@@ -42,6 +46,13 @@ class TripDetailFragment : Fragment() {
     private lateinit var membersContainer: LinearLayout
     private lateinit var paymentsContainer: LinearLayout
     private lateinit var fabVoice: FloatingActionButton
+
+    // Voice UI
+    private lateinit var voicePanel: View
+    private lateinit var voiceIndicator: View
+    private lateinit var txtVoiceStatus: TextView
+    private lateinit var txtVoiceTranscript: TextView
+    private lateinit var btnVoiceCancel: ImageView
 
     private var tripId: Int = -1
 
@@ -63,9 +74,14 @@ class TripDetailFragment : Fragment() {
         paymentsContainer = view.findViewById(R.id.paymentsContainer)
         fabVoice = view.findViewById(R.id.fabVoice)
 
-        fabVoice.setOnClickListener {
-            Toast.makeText(requireContext(), getString(R.string.voice_unavailable), Toast.LENGTH_LONG).show()
-        }
+        // Voice UI
+        voicePanel = view.findViewById(R.id.voicePanel)
+        voiceIndicator = view.findViewById(R.id.voiceIndicator)
+        txtVoiceStatus = view.findViewById(R.id.txtVoiceStatus)
+        txtVoiceTranscript = view.findViewById(R.id.txtVoiceTranscript)
+        btnVoiceCancel = view.findViewById(R.id.btnVoiceCancel)
+
+        setupVoice()
 
         // Animate FAB
         fabVoice.post {
@@ -77,6 +93,141 @@ class TripDetailFragment : Fragment() {
             loadTripDetail()
         }
     }
+
+    // ── Voice interaction ────────────────────────────────────────────
+
+    private fun setupVoice() {
+        fabVoice.setOnClickListener { onFabTapped() }
+
+        btnVoiceCancel.setOnClickListener {
+            val state = conversationRepository.state.value
+            when (state) {
+                is ConversationState.Recording -> {
+                    AudioForegroundService.stop(requireContext())
+                    conversationRepository.cancelRecording()
+                }
+                is ConversationState.Playing -> {
+                    AudioForegroundService.stop(requireContext())
+                    conversationRepository.stopPlayback()
+                }
+                is ConversationState.ReviewingRecording -> {
+                    conversationRepository.discardRecording()
+                }
+                is ConversationState.Error -> {
+                    conversationRepository.dismiss()
+                }
+                else -> {}
+            }
+        }
+
+        // Observe conversation state
+        viewLifecycleOwner.lifecycleScope.launch {
+            conversationRepository.state.collect { state ->
+                updateVoiceUI(state)
+            }
+        }
+    }
+
+    private fun onFabTapped() {
+        when (conversationRepository.state.value) {
+            is ConversationState.Idle -> {
+                AudioForegroundService.start(requireContext())
+                conversationRepository.startRecording()
+            }
+            is ConversationState.Recording -> {
+                AudioForegroundService.stop(requireContext())
+                conversationRepository.stopRecordingForReview()
+            }
+            is ConversationState.ReviewingRecording -> {
+                // Tap FAB to send
+                conversationRepository.approveAndSend()
+            }
+            is ConversationState.Playing -> {
+                AudioForegroundService.stop(requireContext())
+                conversationRepository.stopPlayback()
+            }
+            is ConversationState.Error -> {
+                conversationRepository.retry()
+            }
+            is ConversationState.Processing -> {
+                // Do nothing while processing
+            }
+        }
+    }
+
+    private fun updateVoiceUI(state: ConversationState) {
+        val ctx = context ?: return
+        when (state) {
+            is ConversationState.Idle -> {
+                voicePanel.visibility = View.GONE
+                fabVoice.setImageResource(R.drawable.ic_mic_large)
+                fabVoice.backgroundTintList = ContextCompat.getColorStateList(ctx, R.color.primary)
+                // Show last assistant message if any
+                val lastMsg = conversationRepository.lastAssistantMessage
+                if (lastMsg != null) {
+                    voicePanel.visibility = View.VISIBLE
+                    voiceIndicator.backgroundTintList = ContextCompat.getColorStateList(ctx, R.color.secondary)
+                    txtVoiceStatus.text = "Co-Pilot"
+                    txtVoiceTranscript.visibility = View.VISIBLE
+                    txtVoiceTranscript.text = lastMsg
+                    btnVoiceCancel.visibility = View.GONE
+                }
+            }
+            is ConversationState.Recording -> {
+                voicePanel.visibility = View.VISIBLE
+                voiceIndicator.backgroundTintList = ContextCompat.getColorStateList(ctx, R.color.status_error)
+                txtVoiceStatus.text = "Listening... tap mic when done"
+                txtVoiceTranscript.visibility = View.GONE
+                btnVoiceCancel.visibility = View.VISIBLE
+                fabVoice.setImageResource(R.drawable.ic_stop)
+                fabVoice.backgroundTintList = ContextCompat.getColorStateList(ctx, R.color.status_error)
+            }
+            is ConversationState.ReviewingRecording -> {
+                voicePanel.visibility = View.VISIBLE
+                voiceIndicator.backgroundTintList = ContextCompat.getColorStateList(ctx, R.color.status_pending)
+                txtVoiceStatus.text = "Recorded ${state.durationSeconds}s — tap mic to send"
+                txtVoiceTranscript.visibility = View.GONE
+                btnVoiceCancel.visibility = View.VISIBLE
+                fabVoice.setImageResource(R.drawable.ic_check)
+                fabVoice.backgroundTintList = ContextCompat.getColorStateList(ctx, R.color.secondary)
+            }
+            is ConversationState.Processing -> {
+                voicePanel.visibility = View.VISIBLE
+                voiceIndicator.backgroundTintList = ContextCompat.getColorStateList(ctx, R.color.primary)
+                txtVoiceStatus.text = "Thinking..."
+                txtVoiceTranscript.visibility = View.GONE
+                btnVoiceCancel.visibility = View.GONE
+                fabVoice.setImageResource(R.drawable.ic_mic_large)
+                fabVoice.backgroundTintList = ContextCompat.getColorStateList(ctx, R.color.surface_variant)
+            }
+            is ConversationState.Playing -> {
+                voicePanel.visibility = View.VISIBLE
+                voiceIndicator.backgroundTintList = ContextCompat.getColorStateList(ctx, R.color.secondary)
+                txtVoiceStatus.text = "Co-Pilot is speaking"
+                btnVoiceCancel.visibility = View.VISIBLE
+                if (!state.transcript.isNullOrBlank()) {
+                    txtVoiceTranscript.visibility = View.VISIBLE
+                    txtVoiceTranscript.text = state.transcript
+                } else {
+                    txtVoiceTranscript.visibility = View.GONE
+                }
+                fabVoice.setImageResource(R.drawable.ic_stop)
+                fabVoice.backgroundTintList = ContextCompat.getColorStateList(ctx, R.color.secondary)
+            }
+            is ConversationState.Error -> {
+                voicePanel.visibility = View.VISIBLE
+                voiceIndicator.backgroundTintList = ContextCompat.getColorStateList(ctx, R.color.status_error)
+                txtVoiceStatus.text = "Error"
+                txtVoiceTranscript.visibility = View.VISIBLE
+                txtVoiceTranscript.text = state.message
+                btnVoiceCancel.visibility = View.VISIBLE
+                fabVoice.setImageResource(R.drawable.ic_mic_large)
+                fabVoice.backgroundTintList = ContextCompat.getColorStateList(ctx, R.color.primary)
+            }
+        }
+    }
+
+    // ── Trip data ────────────────────────────────────────────────────
 
     private fun loadTripDetail() {
         viewLifecycleOwner.lifecycleScope.launch {
@@ -126,7 +277,7 @@ class TripDetailFragment : Fragment() {
         val ctx = requireContext()
         val row = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
-            gravity = android.view.Gravity.CENTER_VERTICAL
+            gravity = Gravity.CENTER_VERTICAL
             setPadding(0, dp(8), 0, dp(8))
         }
 
@@ -227,7 +378,7 @@ class TripDetailFragment : Fragment() {
         // Top row: category + status
         val topRow = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
-            gravity = android.view.Gravity.CENTER_VERTICAL
+            gravity = Gravity.CENTER_VERTICAL
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT

@@ -107,6 +107,10 @@ if ! curl -sf -X POST "localhost:9001/sessions/${SESSION_ID}/activate" >/dev/nul
   exit 1
 fi
 
+# --- Accept the --dangerously-skip-permissions risk prompt ---
+sleep 1
+tmux send-keys -t "session-${SESSION_ID}" Enter
+
 echo "RoadTrip bot started via session manager (session id=$SESSION_ID)."
 echo "  Attach:  tmux attach -t session-${SESSION_ID}"
 echo "  Detach:  Ctrl+B then D"
