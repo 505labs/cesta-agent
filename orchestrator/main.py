@@ -110,6 +110,7 @@ VOICE_POLL_TIMEOUT = float(os.environ.get("VOICE_POLL_TIMEOUT", "300.0"))
 
 async def _speech_to_text(base_url: str, audio_bytes: bytes, filename: str) -> str:
     try:
+        logger.info(f"STT: sending {len(audio_bytes)} bytes to {base_url}/v1/audio/transcriptions")
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
                 f"{base_url}/v1/audio/transcriptions",
@@ -117,8 +118,9 @@ async def _speech_to_text(base_url: str, audio_bytes: bytes, filename: str) -> s
                 files={"file": (filename, audio_bytes, "audio/wav")},
                 data={"model": "Systran/faster-whisper-small"},
             )
+            logger.info(f"STT response: status={resp.status_code}, body={resp.text[:500]}")
             if resp.status_code != 200:
-                raise Exception(f"STT returned {resp.status_code}")
+                raise Exception(f"STT returned {resp.status_code}: {resp.text[:200]}")
             return resp.json().get("text", "").strip()
     except httpx.ConnectError:
         raise Exception("Voice VM unreachable")
@@ -216,19 +218,32 @@ async def voice_converse(
 
     audio_bytes = await audio.read()
     filename = audio.filename or "audio.wav"
+    logger.info(f"Voice converse: {len(audio_bytes)} bytes from {wallet}, trip_id={trip_id}")
 
     # STT
-    user_transcript = await _speech_to_text(base, audio_bytes, filename)
+    try:
+        user_transcript = await _speech_to_text(base, audio_bytes, filename)
+    except Exception as e:
+        logger.error(f"STT failed: {e}")
+        raise HTTPException(status_code=502, detail=f"Speech-to-text failed: {e}")
+
     if not user_transcript:
         raise HTTPException(status_code=400, detail="No speech detected")
+    logger.info(f"STT transcript: {user_transcript[:100]}")
 
     # Claude Code via voice channel
-    assistant_text = await _voice_channel_request(user_transcript, wallet, detail_level)
+    try:
+        assistant_text = await _voice_channel_request(user_transcript, wallet, detail_level)
+    except Exception as e:
+        logger.error(f"Voice channel failed: {e}")
+        assistant_text = f"Sorry, I couldn't process that: {e}"
+    logger.info(f"Assistant response: {assistant_text[:100]}")
 
     # TTS
     try:
         response_audio = await _text_to_speech(assistant_text)
-    except Exception:
+    except Exception as e:
+        logger.error(f"TTS failed: {e}")
         # Return text-only if TTS fails
         return JSONResponse(content={
             "user_transcript": user_transcript,
