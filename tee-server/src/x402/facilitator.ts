@@ -11,13 +11,31 @@ import type {
 
 // Redis nonce cache — prevents x402 replay attacks
 // Nonces are stored for 5 minutes (x402 max window is ~65s, extra buffer)
+// Falls back to in-memory Set when Redis is unavailable.
 let redis: ReturnType<typeof createClient> | null = null;
+let redisUnavailable = false;
+const memoryNonces = new Set<string>();
 
 async function getRedis() {
+  if (redisUnavailable) return null;
   if (!redis) {
-    redis = createClient({ url: config.redis.url });
-    redis.on('error', (err) => console.error('Redis error:', err));
-    await redis.connect();
+    try {
+      redis = createClient({ url: config.redis.url });
+      redis.on('error', (err) => {
+        console.error('Redis error:', err);
+        redisUnavailable = true;
+        redis = null;
+      });
+      await Promise.race([
+        redis.connect(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Redis connect timeout')), 3000)),
+      ]);
+    } catch (err) {
+      console.warn('[facilitator] Redis unavailable, falling back to in-memory nonce cache:', (err as Error).message);
+      redisUnavailable = true;
+      redis = null;
+      return null;
+    }
   }
   return redis;
 }
@@ -25,8 +43,14 @@ async function getRedis() {
 const NONCE_TTL_SECONDS = 300;
 
 async function checkAndMarkNonce(nonce: string, chain: string): Promise<boolean> {
-  const r = await getRedis();
   const key = `x402:nonce:${chain}:${nonce}`;
+  const r = await getRedis();
+  if (!r) {
+    // In-memory fallback — no TTL, but sufficient for a running process
+    if (memoryNonces.has(key)) return false;
+    memoryNonces.add(key);
+    return true;
+  }
   // SET key 1 NX EX ttl — returns null if already exists
   const result = await r.set(key, '1', { NX: true, EX: NONCE_TTL_SECONDS });
   return result === 'OK'; // true = first time seen, false = replay

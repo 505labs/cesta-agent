@@ -15,9 +15,10 @@ from socketserver import ThreadingMixIn
 
 class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
     daemon_threads = True
+import tempfile
 from pathlib import Path
 
-LOG_PATH = Path("/tmp/agent_pay.log")
+LOG_PATH = Path(tempfile.gettempdir()) / "agent_pay.log"
 
 HTML = """<!DOCTYPE html>
 <html>

@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">RoadTrip Co-Pilot</string>
+
+    <!-- Common -->
+    <string name="save">Save</string>
+    <string name="settings_saved">Settings saved</string>
+    <string name="permission_required">Microphone permission is required for voice interaction</string>
+    <string name="test_connection">Test Connection</string>
+    <string name="connection_success">Connected successfully!</string>
+    <string name="connection_failed">Connection failed</string>
+
+    <!-- Settings -->
+    <string name="settings_header">Settings</string>
+    <string name="server_url_label">Server Base URL</string>
+    <string name="api_key_label">API Key</string>
+    <string name="voice_settings_header">Voice Settings</string>
+    <string name="detail_level_label">Narration Detail Level</string>
+    <string-array name="detail_levels">
+        <item>Overview</item>
+        <item>Standard</item>
+        <item>Detailed</item>
+    </string-array>
+    <string-array name="detail_level_values">
+        <item>overview</item>
+        <item>standard</item>
+        <item>detailed</item>
+    </string-array>
+
+    <!-- Sessions (legacy, kept for reference) -->
+    <string name="sessions_header">Sessions</string>
+    <string name="session_name_hint">Session Name</string>
+    <string name="session_dir_hint">Working Directory (absolute path)</string>
+    <string name="create_session">Create Session</string>
+    <string name="existing_sessions">Existing Sessions</string>
+    <string name="fetch_sessions">Fetch Sessions</string>
+    <string name="session_created">Session created</string>
+    <string name="session_create_failed">Failed to create session</string>
+    <string name="activate_session">Activate</string>
+    <string name="close_session">Close</string>
+    <string name="delete_session">Delete</string>
+
+    <!-- Trips -->
+    <string name="no_trips">No trips yet. Tap + to create one.</string>
+    <string name="create_trip">Create Trip</string>
+    <string name="trip_name_hint">Trip Name</string>
+    <string name="spend_limit_hint">Spend Limit (USD)</string>
+    <string name="join_trip">Join Trip</string>
+    <string name="join_trip_id_hint">Trip ID</string>
+    <string name="trip_created">Trip created!</string>
+    <string name="trip_joined">Joined trip!</string>
+    <string name="error_generic">Something went wrong</string>
+
+    <!-- Trip Detail -->
+    <string name="treasury_balance">Treasury Balance</string>
+    <string name="spend_limit">Spend Limit</string>
+    <string name="members_header">Members</string>
+    <string name="payments_header">Payments</string>
+    <string name="talk_to_copilot">Talk to Co-Pilot</string>
+    <string name="voice_unavailable">Use Android Auto for voice interaction</string>
+    <string name="approve">Approve</string>
+    <string name="approved">Approved!</string>
+    <string name="payment_approve_error">Failed to approve payment</string>
+    <string name="usdc_format">%s USDC</string>
+    <string name="organizer_format">Organizer: %s</string>
+    <string name="spend_limit_format">$%.2f</string>
+    <string name="member_format" formatted="false">%s (%s)</string>
+    <string name="no_payments">No payments yet.</string>
+    <string name="no_members">No members yet.</string>
+
+    <!-- Wallet -->
+    <string name="wallet_header">Wallet</string>
+    <string name="auth_status_label">Authentication Status</string>
+    <string name="not_authenticated">Not Authenticated</string>
+    <string name="authenticated">Authenticated</string>
+    <string name="paste_token_label">Save API Token</string>
+    <string name="token_hint">Bearer Token</string>
+    <string name="wallet_address_hint">Wallet Address (0x...)</string>
+    <string name="btn_save_token">Save Token</string>
+    <string name="sign_out">Sign Out</string>
+    <string name="token_saved">Token saved</string>
+    <string name="signed_out">Signed out</string>
+</resources>

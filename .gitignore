@@ -2,13 +2,16 @@
 node_modules/
 
 # Python
+.venv/
 venv/
 __pycache__/
 *.pyc
+*.egg-info/
 
 # Env / secrets
 .env
 .env.local
+.env.production
 .circle-recovery/
 
 # Foundry
@@ -22,6 +25,20 @@ contracts/anvil-state.json
 web/.next/
 web/test-results/
 
+# Build outputs
+dist/
+build/
+*.build/
+
+# Android
+.gradle/
+.idea/
+*.iml
+local.properties
+android/app/build/
+android/core/build/
+android/auto/build/
+
 # Playwright MCP artifacts
 .playwright-mcp/
 
@@ -30,9 +47,21 @@ mcp-servers/*/bun.lock
 
 # OS
 .DS_Store
+Thumbs.db
 
 # Claude
 .claude/
 
 # Agent runtime state
 agent/memory/
+
+# Test / cache
+.pytest_cache/
+.mypy_cache/
+.turbo/
+
+# MCP config (contains local paths)
+.mcp.json
+
+# Misc
+${TRIP_MEMORY_DIR}/

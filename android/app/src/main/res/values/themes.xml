@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.RoadTripCopilot" parent="Theme.MaterialComponents.NoActionBar">
+        <!-- Primary colors -->
+        <item name="colorPrimary">@color/primary</item>
+        <item name="colorPrimaryDark">@color/primary_dark</item>
+        <item name="colorPrimaryVariant">@color/primary_dark</item>
+        <item name="colorOnPrimary">@color/on_primary</item>
+
+        <!-- Secondary colors -->
+        <item name="colorSecondary">@color/secondary</item>
+        <item name="colorSecondaryVariant">@color/secondary_dark</item>
+        <item name="colorOnSecondary">@color/on_secondary</item>
+
+        <!-- Background / Surface -->
+        <item name="android:colorBackground">@color/background</item>
+        <item name="colorSurface">@color/surface</item>
+        <item name="colorOnSurface">@color/text_primary</item>
+        <item name="colorOnBackground">@color/text_primary</item>
+
+        <!-- Error -->
+        <item name="colorError">@color/status_error</item>
+        <item name="colorOnError">#FFFFFF</item>
+
+        <!-- System bars -->
+        <item name="android:statusBarColor">@color/background</item>
+        <item name="android:navigationBarColor">@color/bottom_nav_bg</item>
+        <item name="android:windowLightStatusBar">false</item>
+
+        <!-- Default widget styles -->
+        <item name="materialCardViewStyle">@style/Widget.RoadTrip.Card</item>
+        <item name="floatingActionButtonStyle">@style/Widget.RoadTrip.FAB</item>
+        <item name="materialButtonStyle">@style/Widget.RoadTrip.Button</item>
+        <item name="materialAlertDialogTheme">@style/Theme.RoadTrip.Dialog</item>
+
+        <!-- Text input -->
+        <item name="textInputStyle">@style/Widget.RoadTrip.TextInput</item>
+
+        <!-- Ripple -->
+        <item name="android:colorControlHighlight">@color/ripple</item>
+
+        <!-- Text colors -->
+        <item name="android:textColorPrimary">@color/text_primary</item>
+        <item name="android:textColorSecondary">@color/text_secondary</item>
+        <item name="android:textColorTertiary">@color/text_tertiary</item>
+        <item name="android:textColorHint">@color/text_tertiary</item>
+
+        <!-- Window -->
+        <item name="android:windowBackground">@color/background</item>
+
+        <!-- Bottom navigation -->
+        <item name="bottomNavigationStyle">@style/Widget.RoadTrip.BottomNav</item>
+    </style>
+
+    <style name="Widget.RoadTrip.BottomNav" parent="Widget.MaterialComponents.BottomNavigationView">
+        <item name="backgroundTint">@color/bottom_nav_bg</item>
+        <item name="itemIconTint">@color/bottom_nav_selector</item>
+        <item name="itemTextColor">@color/bottom_nav_selector</item>
+        <item name="labelVisibilityMode">labeled</item>
+        <item name="android:minHeight">@dimen/bottom_nav_height</item>
+        <item name="elevation">0dp</item>
+    </style>
+</resources>

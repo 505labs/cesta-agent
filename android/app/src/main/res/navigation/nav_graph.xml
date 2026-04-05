@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/nav_graph"
+    app:startDestination="@id/tripsFragment">
+
+    <fragment
+        android:id="@+id/tripsFragment"
+        android:name="com.roadtrip.copilot.app.ui.TripsFragment"
+        android:label="Trips">
+        <action
+            android:id="@+id/action_trips_to_tripDetail"
+            app:destination="@id/tripDetailFragment"
+            app:enterAnim="@anim/slide_in_right"
+            app:exitAnim="@anim/slide_out_left"
+            app:popEnterAnim="@anim/slide_in_left"
+            app:popExitAnim="@anim/slide_out_right" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/tripDetailFragment"
+        android:name="com.roadtrip.copilot.app.ui.TripDetailFragment"
+        android:label="Trip Detail">
+        <argument
+            android:name="tripId"
+            app:argType="integer" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/walletFragment"
+        android:name="com.roadtrip.copilot.app.ui.WalletFragment"
+        android:label="Wallet" />
+
+    <fragment
+        android:id="@+id/settingsFragment"
+        android:name="com.roadtrip.copilot.app.ui.SettingsFragment"
+        android:label="Settings" />
+
+</navigation>

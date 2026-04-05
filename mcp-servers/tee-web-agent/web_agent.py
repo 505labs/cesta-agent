@@ -27,16 +27,18 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ── Logging ────────────────────────────────────────────────────────────────────
-LOG_PATH = Path("/tmp/agent_pay.log")
-TEE_LOG_PATH = Path("/tmp/tee_pay.log")
-SCREENSHOT_DIR = Path("/tmp/agent_pay_screenshots")
+import tempfile
+_TMP = Path(tempfile.gettempdir())
+LOG_PATH = _TMP / "agent_pay.log"
+TEE_LOG_PATH = _TMP / "tee_pay.log"
+SCREENSHOT_DIR = _TMP / "agent_pay_screenshots"
 SCREENSHOT_DIR.mkdir(parents=True, exist_ok=True)
 
 logging.basicConfig(
     level=logging.DEBUG,
     format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
     handlers=[
-        logging.StreamHandler(sys.stdout),
+        logging.StreamHandler(sys.stderr),
         logging.FileHandler(LOG_PATH, mode="w"),
     ],
 )
@@ -133,8 +135,6 @@ async def run(
     from browser_use import Agent, Browser, BrowserConfig
     from browser_use.browser.context import BrowserContext
     browser = Browser(config=BrowserConfig(headless=headless))
-
-    # ONE context for the entire session — never closed between steps
     ctx = BrowserContext(browser=browser)
 
     identity_block = (
@@ -760,10 +760,6 @@ async def _fill_and_pay(ctx, browser, card: dict) -> bool:
         log.exception(f"_fill_and_pay error: {e}")
         return False
     finally:
-        try:
-            await ctx.close()
-        except Exception:
-            pass
         try:
             await browser.close()
         except Exception:
