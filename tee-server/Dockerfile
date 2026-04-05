@@ -1,16 +1,14 @@
-FROM node:20-alpine AS builder
+FROM oven/bun:1-alpine AS builder
 WORKDIR /app
-RUN npm install -g pnpm
-COPY package.json pnpm-lock.yaml* ./
-RUN pnpm install --frozen-lockfile
+COPY package.json bun.lock* ./
+RUN bun install --frozen-lockfile
 COPY . .
-RUN pnpm build
+RUN bun build ./src/index.ts --outdir ./dist --target bun
 
-FROM node:20-alpine
+FROM oven/bun:1-alpine
 WORKDIR /app
-RUN npm install -g pnpm
-COPY package.json pnpm-lock.yaml* ./
-RUN pnpm install --prod --frozen-lockfile
+COPY package.json bun.lock* ./
+RUN bun install --production --frozen-lockfile
 COPY --from=builder /app/dist ./dist
 EXPOSE 3000
-CMD ["node", "dist/index.js"]
+CMD ["bun", "dist/index.js"]

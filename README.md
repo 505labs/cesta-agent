@@ -167,11 +167,18 @@ cd orchestrator && python -m venv .venv && source .venv/bin/activate && pip inst
 # Web frontend
 cd web && npm install
 
-# MCP servers
+# MCP servers (Node.js)
 cd mcp-servers/treasury && bun install
 cd mcp-servers/trip-memory && bun install
 cd mcp-servers/0g-compute && bun install
 cd mcp-servers/x402-mock && bun install
+
+# MCP servers (Python)
+cd mcp-servers/x402-pay && pip install -r requirements.txt
+cd mcp-servers/tee-web-agent && pip install -r requirements.txt
+
+# TEE server
+cd tee-server && bun install
 ```
 
 ### Start Services (5 terminals)
