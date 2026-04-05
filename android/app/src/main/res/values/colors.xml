@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Primary - Amber/Gold (road trip sunset) -->
+    <color name="primary">#F59E0B</color>
+    <color name="primary_dark">#D97706</color>
+    <color name="primary_light">#FCD34D</color>
+    <color name="primary_container">#422006</color>
+    <color name="on_primary">#000000</color>
+    <color name="on_primary_container">#FCD34D</color>
+
+    <!-- Secondary - Emerald (money/success) -->
+    <color name="secondary">#10B981</color>
+    <color name="secondary_dark">#059669</color>
+    <color name="secondary_light">#6EE7B7</color>
+    <color name="secondary_container">#064E3B</color>
+    <color name="on_secondary">#000000</color>
+
+    <!-- Background / Surface - Dark palette -->
+    <color name="background">#0D1117</color>
+    <color name="surface">#161B22</color>
+    <color name="surface_elevated">#1C2333</color>
+    <color name="surface_variant">#21262D</color>
+    <color name="outline">#30363D</color>
+    <color name="outline_light">#484F58</color>
+
+    <!-- Text colors -->
+    <color name="text_primary">#E6EDF3</color>
+    <color name="text_secondary">#8B949E</color>
+    <color name="text_tertiary">#6E7681</color>
+    <color name="text_on_primary">#000000</color>
+
+    <!-- Status colors -->
+    <color name="status_active">#10B981</color>
+    <color name="status_active_bg">#1A3A2A</color>
+    <color name="status_pending">#F59E0B</color>
+    <color name="status_pending_bg">#3A2F1A</color>
+    <color name="status_completed">#3B82F6</color>
+    <color name="status_completed_bg">#1A2A3A</color>
+    <color name="status_error">#EF4444</color>
+    <color name="status_error_bg">#3A1A1A</color>
+
+    <!-- Semantic -->
+    <color name="balance_positive">#10B981</color>
+    <color name="balance_negative">#EF4444</color>
+    <color name="divider">#21262D</color>
+    <color name="ripple">#33F59E0B</color>
+
+    <!-- Gradient helpers -->
+    <color name="gradient_amber_start">#F59E0B</color>
+    <color name="gradient_amber_end">#D97706</color>
+    <color name="gradient_emerald_start">#10B981</color>
+    <color name="gradient_emerald_end">#059669</color>
+    <color name="gradient_card_start">#1C2333</color>
+    <color name="gradient_card_end">#161B22</color>
+
+    <!-- Bottom Nav -->
+    <color name="bottom_nav_bg">#0D1117</color>
+    <color name="bottom_nav_indicator">#2A1F0A</color>
+    <color name="bottom_nav_active">#F59E0B</color>
+    <color name="bottom_nav_inactive">#484F58</color>
+
+    <!-- Transparent -->
+    <color name="transparent">#00000000</color>
+    <color name="scrim">#80000000</color>
+</resources>

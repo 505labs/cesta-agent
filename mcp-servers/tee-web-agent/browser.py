@@ -9,7 +9,7 @@ Default: grok
 
 import asyncio
 import os
-from browser_use import Agent, BrowserConfig, Browser
+from browser_use import Agent, Browser, BrowserConfig
 
 
 def get_llm():
@@ -73,7 +73,8 @@ async def inject_card_into_checkout(
 
     llm = get_llm()
     provider = os.environ.get("LLM_PROVIDER", "grok")
-    print(f"[browser-use] Using LLM provider: {provider}")
+    import sys
+    print(f"[browser-use] Using LLM provider: {provider}", file=sys.stderr)
 
     browser = Browser(config=BrowserConfig(headless=headless))
 
@@ -83,15 +84,15 @@ async def inject_card_into_checkout(
         browser=browser,
     )
 
-    print(f"[browser-use] Navigating to {checkout_url} to fill card **** {card.get('last4', '****')}")
+    print(f"[browser-use] Navigating to {checkout_url} to fill card **** {card.get('last4', '****')}", file=sys.stderr)
 
     try:
         result = await agent.run(max_steps=20)
         final_output = str(result)
-        print(f"[browser-use] Result: {final_output}")
+        print(f"[browser-use] Result: {final_output}", file=sys.stderr)
         return "SUCCESS" in final_output.upper()
     except Exception as e:
-        print(f"[browser-use] Error: {e}")
+        print(f"[browser-use] Error: {e}", file=sys.stderr)
         return False
     finally:
         await browser.close()

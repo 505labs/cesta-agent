@@ -93,7 +93,7 @@ async def pay(
 
 def _start_log_server():
     """Start the log streaming server in the background and open browser."""
-    import subprocess, socket, webbrowser, time
+    import subprocess, socket, time
     PORT = 4242
     # Check if already running
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -106,7 +106,21 @@ def _start_log_server():
         stderr=subprocess.DEVNULL,
     )
     time.sleep(0.5)
-    webbrowser.open(f"http://localhost:{PORT}")
+    # Open browser in subprocess to avoid osascript noise on stdout (MCP stdio transport)
+    try:
+        import webbrowser, os, sys
+        # Redirect stdout temporarily to avoid corrupting MCP stdio
+        devnull = os.open(os.devnull, os.O_WRONLY)
+        old_stdout = os.dup(1)
+        os.dup2(devnull, 1)
+        try:
+            webbrowser.open(f"http://localhost:{PORT}")
+        finally:
+            os.dup2(old_stdout, 1)
+            os.close(devnull)
+            os.close(old_stdout)
+    except Exception:
+        pass  # non-critical
 
 
 if __name__ == "__main__":

@@ -16,7 +16,8 @@ try:
     HEDERA_AVAILABLE = True
 except ImportError:
     HEDERA_AVAILABLE = False
-    print("[wallet_hedera] hedera-sdk-python not installed — Hedera payments unavailable")
+    import sys
+    print("[wallet_hedera] hedera-sdk-python not installed — Hedera payments unavailable", file=sys.stderr)
 
 
 def build_hedera_payment_payload(requirements: dict) -> str:
