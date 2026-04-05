@@ -18,14 +18,18 @@ class AudioPlayerImpl @Inject constructor() : AudioPlayer {
     override suspend fun play(audioData: ByteArray, sampleRate: Int) = withContext(Dispatchers.IO) {
         stop()
 
-        val pcmData = if (isWavFormat(audioData)) {
-            audioData.copyOfRange(44, audioData.size)
+        val effectiveSampleRate: Int
+        val pcmData: ByteArray
+        if (isWavFormat(audioData)) {
+            effectiveSampleRate = wavSampleRate(audioData) ?: sampleRate
+            pcmData = audioData.copyOfRange(44, audioData.size)
         } else {
-            audioData
+            effectiveSampleRate = sampleRate
+            pcmData = audioData
         }
 
         val bufferSize = AudioTrack.getMinBufferSize(
-            sampleRate,
+            effectiveSampleRate,
             AudioFormat.CHANNEL_OUT_MONO,
             AudioFormat.ENCODING_PCM_16BIT
         )
@@ -40,7 +44,7 @@ class AudioPlayerImpl @Inject constructor() : AudioPlayer {
             .setAudioFormat(
                 AudioFormat.Builder()
                     .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                    .setSampleRate(sampleRate)
+                    .setSampleRate(effectiveSampleRate)
                     .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
                     .build()
             )
@@ -85,5 +89,14 @@ class AudioPlayerImpl @Inject constructor() : AudioPlayer {
             data[1] == 'I'.code.toByte() &&
             data[2] == 'F'.code.toByte() &&
             data[3] == 'F'.code.toByte()
+    }
+
+    /** Read sample rate from WAV header bytes 24-27 (little-endian uint32). */
+    private fun wavSampleRate(data: ByteArray): Int? {
+        if (data.size < 28) return null
+        return (data[24].toInt() and 0xFF) or
+            ((data[25].toInt() and 0xFF) shl 8) or
+            ((data[26].toInt() and 0xFF) shl 16) or
+            ((data[27].toInt() and 0xFF) shl 24)
     }
 }

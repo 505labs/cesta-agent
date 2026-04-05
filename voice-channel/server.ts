@@ -19,7 +19,7 @@ import { randomBytes } from 'crypto'
 
 // --- Configuration ---
 const HTTP_PORT = parseInt(process.env.VOICE_CHANNEL_PORT ?? '9000', 10)
-const REQUEST_TIMEOUT_MS = parseInt(process.env.VOICE_CHANNEL_TIMEOUT ?? '120000', 10)
+const REQUEST_TIMEOUT_MS = parseInt(process.env.VOICE_CHANNEL_TIMEOUT ?? '600000', 10)
 
 // --- Pending request bridge ---
 // Maps request_id -> { resolve, reject, timer } for correlating

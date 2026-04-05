@@ -64,6 +64,7 @@ class MainScreen(carContext: CarContext) : Screen(carContext) {
             is ConversationState.Recording -> buildRecordingTemplate()
             is ConversationState.ReviewingRecording -> buildReviewTemplate(state)
             is ConversationState.Processing -> buildProcessingTemplate()
+            is ConversationState.WaitingForResponse -> buildWaitingTemplate(state)
             is ConversationState.Playing -> buildPlayingTemplate(state)
             is ConversationState.Error -> buildErrorTemplate(state)
         }
@@ -204,10 +205,32 @@ class MainScreen(carContext: CarContext) : Screen(carContext) {
     }
 
     private fun buildProcessingTemplate(): Template {
-        return MessageTemplate.Builder("Thinking...")
+        return MessageTemplate.Builder("Sending...")
             .setTitle(screenTitle)
             .setHeaderAction(Action.APP_ICON)
             .setLoading(true)
+            .build()
+    }
+
+    private fun buildWaitingTemplate(state: ConversationState.WaitingForResponse): Template {
+        val transcript = state.userTranscript
+        val message = if (!transcript.isNullOrBlank()) {
+            "Co-Pilot is working on it...\n\nYou said: ${truncate(transcript, 80)}"
+        } else {
+            "Co-Pilot is working on it..."
+        }
+        return MessageTemplate.Builder(message)
+            .setTitle(screenTitle)
+            .setHeaderAction(Action.APP_ICON)
+            .setLoading(true)
+            .addAction(
+                Action.Builder()
+                    .setTitle("Cancel")
+                    .setOnClickListener {
+                        repository.cancelWaiting()
+                    }
+                    .build()
+            )
             .build()
     }
 

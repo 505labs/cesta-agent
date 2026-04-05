@@ -45,7 +45,7 @@ object NetworkModule {
         val dynamicBaseUrlInterceptor = Interceptor { chain ->
             val originalRequest = chain.request()
             val baseUrl = prefs.getString(KEY_BASE_URL, DEFAULT_BASE_URL)?.trim() ?: DEFAULT_BASE_URL
-            val parsed = baseUrl.toHttpUrlOrNull() ?: DEFAULT_BASE_URL.toHttpUrlOrNull()!!
+            val parsed = baseUrl.toHttpUrlOrNull() ?: PLACEHOLDER_BASE_URL.toHttpUrlOrNull()!!
             val newUrl = originalRequest.url.newBuilder()
                 .scheme(parsed.scheme)
                 .host(parsed.host)

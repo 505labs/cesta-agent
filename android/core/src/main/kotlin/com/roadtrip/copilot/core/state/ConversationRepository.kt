@@ -27,10 +27,16 @@ class ConversationRepository @Inject constructor(
     val messages: StateFlow<List<Message>> = _messages.asStateFlow()
 
     private var recordingJob: Job? = null
+    private var pollingJob: Job? = null
     private var pcmChunks = mutableListOf<ByteArray>()
     private var pendingWavData: ByteArray? = null
     private var recordingStartTime: Long = 0L
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    companion object {
+        private const val POLL_INTERVAL_MS = 3_000L
+        private const val POLL_TIMEOUT_MS = 600_000L // 10 minutes
+    }
 
     val lastAssistantMessage: String?
         get() = _messages.value.lastOrNull { it.role == Message.Role.ASSISTANT }?.text
@@ -83,34 +89,20 @@ class ConversationRepository @Inject constructor(
         scope.launch {
             try {
                 val detailLevel = prefs.getString("detail_level", "standard") ?: "standard"
-                val result = apiClient.sendAudio(wavData, tripRepository.activeTripId.value, detailLevel)
+                val submitResult = apiClient.submitAudio(wavData, tripRepository.activeTripId.value, detailLevel)
 
-                result.fold(
-                    onSuccess = { response ->
-                        response.userTranscript?.let { transcript ->
+                submitResult.fold(
+                    onSuccess = { submitResponse ->
+                        submitResponse.user_transcript.let { transcript ->
                             addMessage(Message(Message.Role.USER, transcript))
                         }
-
-                        val timestamp = System.currentTimeMillis()
-                        val audioPath = audioStore.save(response.audioData, timestamp)
-
-                        response.assistantTranscript?.let { transcript ->
-                            addMessage(Message(
-                                role = Message.Role.ASSISTANT,
-                                text = transcript,
-                                timestamp = timestamp,
-                                audioFile = audioPath
-                            ))
-                        }
-
-                        _state.value = ConversationState.Playing(response.assistantTranscript)
-                        audioPlayer.play(response.audioData)
-                        _state.value = ConversationState.Idle
+                        _state.value = ConversationState.WaitingForResponse(submitResponse.user_transcript)
                         audioFocusManager.abandonFocus()
+                        startPolling(submitResponse.request_id)
                     },
                     onFailure = { error ->
                         _state.value = ConversationState.Error(
-                            error.message ?: "Failed to communicate with server"
+                            error.message ?: "Failed to submit audio"
                         )
                         audioFocusManager.abandonFocus()
                     }
@@ -122,6 +114,72 @@ class ConversationRepository @Inject constructor(
                 audioFocusManager.abandonFocus()
             }
         }
+    }
+
+    private fun startPolling(requestId: String) {
+        pollingJob?.cancel()
+        pollingJob = scope.launch {
+            val deadline = System.currentTimeMillis() + POLL_TIMEOUT_MS
+            while (isActive && System.currentTimeMillis() < deadline) {
+                delay(POLL_INTERVAL_MS)
+
+                val pollResult = apiClient.pollVoiceResult(requestId)
+                pollResult.fold(
+                    onSuccess = { response ->
+                        if (response != null) {
+                            // Completed — play the response
+                            handleAsyncResponse(response)
+                            return@launch
+                        }
+                        // null = still processing, keep polling
+                    },
+                    onFailure = { error ->
+                        _state.value = ConversationState.Error(
+                            error.message ?: "Failed to get response"
+                        )
+                        return@launch
+                    }
+                )
+            }
+
+            // Timed out
+            if (_state.value is ConversationState.WaitingForResponse) {
+                _state.value = ConversationState.Error("Request timed out after 10 minutes")
+            }
+        }
+    }
+
+    private suspend fun handleAsyncResponse(response: com.roadtrip.copilot.core.network.dto.AudioResponse) {
+        val timestamp = System.currentTimeMillis()
+        val audioPath = if (response.audioData.isNotEmpty()) audioStore.save(response.audioData, timestamp) else null
+
+        response.assistantTranscript?.let { transcript ->
+            addMessage(Message(
+                role = Message.Role.ASSISTANT,
+                text = transcript,
+                timestamp = timestamp,
+                audioFile = audioPath
+            ))
+        }
+
+        if (response.audioData.isNotEmpty()) {
+            if (!audioFocusManager.requestFocus()) {
+                _state.value = ConversationState.Idle
+                return
+            }
+            _state.value = ConversationState.Playing(response.assistantTranscript)
+            audioPlayer.play(response.audioData)
+            _state.value = ConversationState.Idle
+            audioFocusManager.abandonFocus()
+        } else {
+            _state.value = ConversationState.Idle
+        }
+    }
+
+    fun cancelWaiting() {
+        pollingJob?.cancel()
+        pollingJob = null
+        _state.value = ConversationState.Idle
     }
 
     fun discardRecording() {
@@ -172,6 +230,8 @@ class ConversationRepository @Inject constructor(
         audioRecorder.stopRecording()
         recordingJob?.cancel()
         recordingJob = null
+        pollingJob?.cancel()
+        pollingJob = null
         audioPlayer.stop()
         pcmChunks.clear()
         pendingWavData = null

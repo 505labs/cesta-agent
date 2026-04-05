@@ -140,10 +140,14 @@
     <style name="Theme.RoadTrip.Dialog" parent="ThemeOverlay.MaterialComponents.MaterialAlertDialog">
         <item name="colorSurface">@color/surface_elevated</item>
         <item name="colorOnSurface">@color/text_primary</item>
-        <item name="materialAlertDialogTitleTextStyle">@style/TextAppearance.RoadTrip.Title</item>
+        <item name="materialAlertDialogTitleTextStyle">@style/Widget.RoadTrip.Dialog.Title</item>
         <item name="shapeAppearanceOverlay">@style/ShapeAppearance.RoadTrip.Dialog</item>
         <item name="buttonBarPositiveButtonStyle">@style/Widget.RoadTrip.Button.Dialog</item>
         <item name="buttonBarNegativeButtonStyle">@style/Widget.RoadTrip.Button.Dialog.Negative</item>
+    </style>
+
+    <style name="Widget.RoadTrip.Dialog.Title" parent="MaterialAlertDialog.MaterialComponents.Title.Text">
+        <item name="android:textAppearance">@style/TextAppearance.RoadTrip.Title</item>
     </style>
 
     <style name="ShapeAppearance.RoadTrip.Dialog" parent="">

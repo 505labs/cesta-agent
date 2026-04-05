@@ -113,6 +113,9 @@ class TripDetailFragment : Fragment() {
                 is ConversationState.ReviewingRecording -> {
                     conversationRepository.discardRecording()
                 }
+                is ConversationState.WaitingForResponse -> {
+                    conversationRepository.cancelWaiting()
+                }
                 is ConversationState.Error -> {
                     conversationRepository.dismiss()
                 }
@@ -150,7 +153,11 @@ class TripDetailFragment : Fragment() {
                 conversationRepository.retry()
             }
             is ConversationState.Processing -> {
-                // Do nothing while processing
+                // Do nothing while submitting
+            }
+            is ConversationState.WaitingForResponse -> {
+                // Allow cancel while waiting
+                conversationRepository.cancelWaiting()
             }
         }
     }
@@ -194,9 +201,23 @@ class TripDetailFragment : Fragment() {
             is ConversationState.Processing -> {
                 voicePanel.visibility = View.VISIBLE
                 voiceIndicator.backgroundTintList = ContextCompat.getColorStateList(ctx, R.color.primary)
-                txtVoiceStatus.text = "Thinking..."
+                txtVoiceStatus.text = "Sending..."
                 txtVoiceTranscript.visibility = View.GONE
                 btnVoiceCancel.visibility = View.GONE
+                fabVoice.setImageResource(R.drawable.ic_mic_large)
+                fabVoice.backgroundTintList = ContextCompat.getColorStateList(ctx, R.color.surface_variant)
+            }
+            is ConversationState.WaitingForResponse -> {
+                voicePanel.visibility = View.VISIBLE
+                voiceIndicator.backgroundTintList = ContextCompat.getColorStateList(ctx, R.color.primary)
+                txtVoiceStatus.text = "Co-Pilot is working on it..."
+                if (!state.userTranscript.isNullOrBlank()) {
+                    txtVoiceTranscript.visibility = View.VISIBLE
+                    txtVoiceTranscript.text = "You said: ${state.userTranscript}"
+                } else {
+                    txtVoiceTranscript.visibility = View.GONE
+                }
+                btnVoiceCancel.visibility = View.VISIBLE
                 fabVoice.setImageResource(R.drawable.ic_mic_large)
                 fabVoice.backgroundTintList = ContextCompat.getColorStateList(ctx, R.color.surface_variant)
             }

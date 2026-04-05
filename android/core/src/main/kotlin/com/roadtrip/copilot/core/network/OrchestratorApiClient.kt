@@ -47,6 +47,73 @@ class OrchestratorApiClient @Inject constructor(
         }
     }
 
+    // --- Async voice submit + poll ---
+
+    suspend fun submitAudio(wavData: ByteArray, tripId: Int?, detailLevel: String = "standard"): Result<VoiceSubmitResponse> {
+        return try {
+            val audioPart = MultipartBody.Part.createFormData(
+                "audio", "recording.wav",
+                wavData.toRequestBody("audio/wav".toMediaType())
+            )
+            val tripIdBody = tripId?.toString()?.toRequestBody("text/plain".toMediaType())
+            val detailLevelBody = detailLevel.toRequestBody("text/plain".toMediaType())
+
+            val response = apiService.voiceSubmit(audioPart, tripIdBody, detailLevelBody)
+
+            if (!response.isSuccessful) {
+                return Result.failure(Exception("Submit error ${response.code()}: ${response.errorBody()?.string()}"))
+            }
+
+            val body = response.body()?.string() ?: return Result.failure(Exception("Empty response"))
+            val parsed = moshi.adapter(VoiceSubmitResponse::class.java).fromJson(body)
+                ?: return Result.failure(Exception("Parse error"))
+            Result.success(parsed)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Poll for async voice result. Returns:
+     * - AudioResponse with audio if completed with TTS
+     * - AudioResponse with empty audio + assistant transcript if TTS failed
+     * - null if still processing
+     * - throws on error
+     */
+    suspend fun pollVoiceResult(requestId: String): Result<AudioResponse?> {
+        return try {
+            val response = apiService.voicePoll(requestId)
+
+            if (!response.isSuccessful) {
+                return Result.failure(Exception("Poll error ${response.code()}"))
+            }
+
+            val contentType = response.headers()["Content-Type"] ?: ""
+
+            if (contentType.contains("audio/wav") || contentType.contains("audio/x-wav")) {
+                // Completed with audio
+                val audioBytes = response.body()?.bytes() ?: return Result.failure(Exception("Empty audio body"))
+                val userTranscript = response.headers()["X-User-Transcript"]
+                val assistantText = response.headers()["X-Assistant-Text"]
+                Result.success(AudioResponse(audioBytes, userTranscript, assistantText))
+            } else {
+                // JSON response — either still processing, error, or completed without audio
+                val body = response.body()?.string() ?: return Result.failure(Exception("Empty response"))
+                val parsed = moshi.adapter(VoicePollResponse::class.java).fromJson(body)
+                    ?: return Result.failure(Exception("Parse error"))
+
+                when (parsed.status) {
+                    "processing" -> Result.success(null) // still working
+                    "completed" -> Result.success(AudioResponse(ByteArray(0), parsed.user_transcript, parsed.assistant_text))
+                    "error" -> Result.failure(Exception(parsed.error ?: "Voice processing failed"))
+                    else -> Result.failure(Exception("Unknown status: ${parsed.status}"))
+                }
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     // Auth
     suspend fun getNonce(): Result<String> {
         return try {

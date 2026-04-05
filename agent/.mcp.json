@@ -1,5 +1,12 @@
 {
   "mcpServers": {
+    "voice-channel": {
+      "command": "bun",
+      "args": ["../voice-channel/server.ts"],
+      "env": {
+        "VOICE_CHANNEL_PORT": "${VOICE_CHANNEL_PORT}"
+      }
+    },
     "google-maps": {
       "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-google-maps"],
@@ -45,13 +52,13 @@
     },
     "x402-pay": {
       "type": "stdio",
-      "command": "/Users/luka/.pyenv/versions/tee-agent/bin/python",
+      "command": "../mcp-servers/x402-pay/.venv/bin/python",
       "args": ["../mcp-servers/x402-pay/server.py"],
       "env": {}
     },
     "tee-web-agent": {
       "type": "stdio",
-      "command": "/Users/luka/.pyenv/versions/tee-agent/bin/python",
+      "command": "../mcp-servers/tee-web-agent/.venv/bin/python",
       "args": ["../mcp-servers/tee-web-agent/mcp_server.py"],
       "env": {}
     }

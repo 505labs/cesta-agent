@@ -8,6 +8,7 @@ Central hub: wallet auth, trip management, and voice pipeline
 import asyncio
 import logging
 import os
+import secrets
 import time
 from pathlib import Path
 
@@ -107,6 +108,10 @@ async def auth_verify(request: Request):
 VOICE_POLL_INTERVAL = float(os.environ.get("VOICE_POLL_INTERVAL", "2.0"))
 VOICE_POLL_TIMEOUT = float(os.environ.get("VOICE_POLL_TIMEOUT", "300.0"))
 
+# --- Async voice request store (in-memory) ---
+# Maps request_id -> {status, user_transcript, assistant_text, audio_bytes, error}
+_async_requests: dict[str, dict] = {}
+
 
 async def _speech_to_text(base_url: str, audio_bytes: bytes, filename: str) -> str:
     try:
@@ -128,7 +133,9 @@ async def _speech_to_text(base_url: str, audio_bytes: bytes, filename: str) -> s
 
 async def _voice_channel_request(text: str, user_id: str, detail_level: str = "standard") -> str:
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        # Voice channel holds the connection open until Claude responds (up to 10 min),
+        # so the HTTP timeout must exceed the voice channel's own REQUEST_TIMEOUT_MS.
+        async with httpx.AsyncClient(timeout=660.0) as client:
             resp = await client.post(
                 f"{VOICE_CHANNEL_URL}/voice",
                 json={"text": text, "user_id": user_id, "detail_level": detail_level, "type": "voice"},
@@ -189,7 +196,7 @@ async def _text_to_speech(text: str) -> bytes:
             resp = await client.post(
                 f"{base}/v1/audio/speech",
                 headers=voice_headers(),
-                json={"input": text, "model": "speaches-ai/Kokoro-82M-v1.0-ONNX-fp16", "voice": TTS_VOICE, "speed": TTS_SPEED},
+                json={"input": text, "model": "speaches-ai/Kokoro-82M-v1.0-ONNX-fp16", "voice": TTS_VOICE, "speed": TTS_SPEED, "response_format": "wav"},
             )
             if resp.status_code != 200:
                 raise Exception(f"TTS returned {resp.status_code}")
@@ -259,6 +266,123 @@ async def voice_converse(
             "X-Trip-Id": str(trip_id or ""),
         },
     )
+
+
+# --- Async voice submit + poll (for Android / long-running requests) ---
+
+async def _process_voice_async(request_id: str, user_transcript: str, wallet: str, detail_level: str):
+    """Background task: voice channel + TTS, stores result in _async_requests."""
+    try:
+        assistant_text = await _voice_channel_request(user_transcript, wallet, detail_level)
+        logger.info(f"Async {request_id}: assistant response received ({len(assistant_text)} chars)")
+
+        try:
+            audio_bytes = await _text_to_speech(assistant_text)
+        except Exception as e:
+            logger.error(f"Async {request_id}: TTS failed: {e}")
+            audio_bytes = None
+
+        _async_requests[request_id].update({
+            "status": "completed",
+            "assistant_text": assistant_text,
+            "audio_bytes": audio_bytes,
+            "completed_at": time.time(),
+        })
+    except Exception as e:
+        logger.error(f"Async {request_id}: processing failed: {e}")
+        _async_requests[request_id].update({
+            "status": "error",
+            "error": str(e),
+        })
+
+
+@app.post("/v1/voice/submit")
+async def voice_submit(
+    audio: UploadFile = File(...),
+    trip_id: int = Form(None),
+    detail_level: str = Form("standard"),
+    authorization: str = Header(None),
+):
+    """Accept audio, do STT, kick off async processing, return request_id immediately."""
+    wallet = get_wallet_from_request(authorization) or "anonymous"
+
+    base = voice_base_url()
+    if not base:
+        raise HTTPException(status_code=503, detail="Core VM not configured. Set CORE_VM_URL.")
+
+    audio_bytes = await audio.read()
+    filename = audio.filename or "audio.wav"
+    logger.info(f"Voice submit: {len(audio_bytes)} bytes from {wallet}, trip_id={trip_id}")
+
+    # STT (synchronous — fast enough to do inline)
+    try:
+        user_transcript = await _speech_to_text(base, audio_bytes, filename)
+    except Exception as e:
+        logger.error(f"STT failed: {e}")
+        raise HTTPException(status_code=502, detail=f"Speech-to-text failed: {e}")
+
+    if not user_transcript:
+        raise HTTPException(status_code=400, detail="No speech detected")
+    logger.info(f"STT transcript: {user_transcript[:100]}")
+
+    # Generate request ID and store
+    request_id = secrets.token_hex(12)
+    _async_requests[request_id] = {
+        "status": "processing",
+        "user_transcript": user_transcript,
+        "wallet": wallet,
+        "trip_id": trip_id,
+        "created_at": time.time(),
+    }
+
+    # Fire and forget background processing
+    asyncio.create_task(_process_voice_async(request_id, user_transcript, wallet, detail_level))
+
+    return JSONResponse(content={
+        "request_id": request_id,
+        "user_transcript": user_transcript,
+        "status": "processing",
+    })
+
+
+@app.get("/v1/voice/{request_id}")
+async def voice_poll(request_id: str):
+    """Poll for async voice result. Returns audio/wav when completed."""
+    entry = _async_requests.get(request_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Unknown request_id")
+
+    status = entry["status"]
+
+    if status == "processing":
+        elapsed = int(time.time() - entry.get("created_at", time.time()))
+        return JSONResponse(content={"status": "processing", "elapsed_seconds": elapsed})
+
+    if status == "error":
+        return JSONResponse(content={"status": "error", "error": entry.get("error", "Unknown error")}, status_code=200)
+
+    # status == "completed"
+    audio_bytes = entry.get("audio_bytes")
+    assistant_text = entry.get("assistant_text", "")
+    user_transcript = entry.get("user_transcript", "")
+
+    if audio_bytes:
+        return Response(
+            content=audio_bytes,
+            media_type="audio/wav",
+            headers={
+                "X-User-Transcript": user_transcript[:200],
+                "X-Assistant-Text": assistant_text[:500],
+                "X-Status": "completed",
+            },
+        )
+    else:
+        # TTS failed — return text only
+        return JSONResponse(content={
+            "status": "completed",
+            "user_transcript": user_transcript,
+            "assistant_text": assistant_text,
+        })
 
 
 # --- Text converse (for web frontend without mic) ---

@@ -37,7 +37,7 @@ interface OrchestratorApiService {
     @POST("v1/trips/{trip_id}/payments/{payment_id}/approve")
     suspend fun approvePayment(@Path("trip_id") tripId: Int, @Path("payment_id") paymentId: String): Response<ResponseBody>
 
-    // Voice
+    // Voice (synchronous — legacy)
     @Multipart
     @POST("v1/voice/converse")
     suspend fun voiceConverse(
@@ -45,6 +45,18 @@ interface OrchestratorApiService {
         @Part("trip_id") tripId: RequestBody?,
         @Part("detail_level") detailLevel: RequestBody
     ): Response<ResponseBody>
+
+    // Voice (async submit + poll)
+    @Multipart
+    @POST("v1/voice/submit")
+    suspend fun voiceSubmit(
+        @Part audio: MultipartBody.Part,
+        @Part("trip_id") tripId: RequestBody?,
+        @Part("detail_level") detailLevel: RequestBody
+    ): Response<ResponseBody>
+
+    @GET("v1/voice/{request_id}")
+    suspend fun voicePoll(@Path("request_id") requestId: String): Response<ResponseBody>
 
     // Text
     @POST("v1/text/converse")
