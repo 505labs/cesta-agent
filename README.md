@@ -24,71 +24,7 @@ One voice-first AI agent that plans, books, pays, and splits. You talk, the car 
 
 ## Architecture
 
-```
-                              +-----------------------+
-                              |     WEB FRONTEND      |
-                              |     (Next.js :3000)   |
-                              |                       |
-                              |  Reown AppKit         |  <-- Wallet connection + SIWE auth
-                              |  Trip Dashboard       |  <-- Balance, spending feed, approvals
-                              |  Voice Interface      |  <-- Push-to-talk mic + text fallback
-                              +-----------+-----------+
-                                          |
-                                     HTTP | REST API
-                                          |
-                              +-----------v-----------+
-                              |     ORCHESTRATOR      |
-                              |   (FastAPI :8080)     |
-                              |                       |
-                              |  SIWE Auth            |  <-- Wallet-based login (no passwords)
-                              |  Trip CRUD            |  <-- Create, join, list trips
-                              |  Voice Pipeline       |  <-- Audio in -> STT -> Agent -> TTS -> Audio out
-                              |  Payment Approvals    |  <-- 2-of-N in-app voting for large spends
-                              +-----------+-----------+
-                                          |
-                          +---------------+----------------+
-                          |                                |
-                +---------v----------+          +----------v---------+
-                |    VOICE VM (GPU)  |          |   CLAUDE CODE      |
-                |                    |          |   AI AGENT         |
-                |  Whisper STT       |          |                    |
-                |  (speech -> text)  |          |  CLAUDE.md persona |
-                |                    |          |  (voice-first,     |
-                |  Kokoro TTS        |          |   budget-aware)    |
-                |  (text -> speech)  |          |                    |
-                +--------------------+          |  MCP Tool Servers: |
-                                                |  +-- google-maps   |  <-- Places, directions, POIs
-                                                |  +-- weather       |  <-- Forecasts, alerts
-                                                |  +-- treasury -----+---> GroupTreasury.sol (Arc)
-                                                |  |   book_hotel    |     +- deposit / spend / settle
-                                                |  |   pay_toll      |     +- nanopayments (gas-free)
-                                                |  |   x402 client   |     +- category budgets
-                                                |  +-- trip-memory --+---> 0G Storage (KV + files)
-                                                |  +-- 0g-compute ---+---> 0G Compute (TEE inference)
-                                                |  +-- voice-channel |
-                                                +--------------------+
-                                                          |
-                          +-------------------------------+-------------------------------+
-                          |                               |                               |
-                +---------v----------+          +---------v----------+          +---------v----------+
-                |    ARC TESTNET     |          |    0G NETWORK      |          |   x402 MOCK APIs   |
-                |                    |          |                    |          |   (:4402)           |
-                |  GroupTreasury.sol |          |  0G Storage        |          |                    |
-                |  +- USDC deposits  |          |  +- Trip memory   |          |  /book-hotel       |
-                |  +- Agent spending |          |  +- Preferences   |          |  /pay-toll          |
-                |  +- Nanopayments   |          |  +- Itinerary     |          |  /gas-prices        |
-                |  +- Category budget|          |                    |          |  /restaurants       |
-                |  +- Group voting   |          |  0G Compute (TEE) |          |  /weather           |
-                |  +- Settlement     |          |  +- Hotel compare  |          |  /route-optimization|
-                |                    |          |  +- Verified eval  |          |                    |
-                |  ERC-8004 Identity |          |                    |          |  Accepts x402      |
-                |  +- Agent NFT      |          |  Agent iNFT        |          |  nanopayments      |
-                |  +- Reputation     |          |  +- ERC-7857 NFT  |          |  (HTTP 402 flow)   |
-                |                    |          |  +- Reputation     |          |                    |
-                |  Chain ID: 5042002 |          |  Chain ID: 16602   |          |                    |
-                |  Gas token: USDC   |          |  (Galileo testnet) |          |                    |
-                +--------------------+          +--------------------+          +--------------------+
-```
+![Architecture](architecture.png)
 
 ### How the layers work together
 
