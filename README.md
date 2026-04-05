@@ -106,6 +106,56 @@ One voice-first AI agent that plans, books, pays, and splits. You talk, the car 
 
 ---
 
+## TEE Card Bridge
+
+The **TEE server** (`tee-server/`) is a Trusted Execution Environment that bridges on-chain payments to real-world spending via Stripe virtual cards. When the AI agent needs to pay at a real-world merchant (e.g. booking a hotel that doesn't accept crypto), it uses the TEE bridge to exchange on-chain USDC/EURC for a one-time virtual Visa card — entirely without exposing card credentials to any operator.
+
+### How It Works
+
+```
+Claude Agent
+ |-- 1. request_card(amount=245_00, chain="arc-testnet")
+ |       └── tee-web-agent MCP calls POST /v1/card-issue (no payment header yet)
+ |           TEE returns HTTP 402 with X-PAYMENT-REQUIRED header
+ |-- 2. x402-pay MCP reads requirements, signs payment, retries with X-PAYMENT header
+ |-- 3. TEE verifies payment on Arc, settles on-chain (tx_hash recorded)
+ |-- 4. TEE issues one-time Stripe virtual card (10-min TTL, auto-cancelled)
+ |-- 5. Card credentials ECIES-encrypted for agent's pubkey — TEE never sees plaintext
+ |-- 6. Signed receipt returned: { receipt, tee_signature }
+ |       └── Anyone can verify: ethers.verifyMessage(receipt, tee_signature) === tee_pubkey
+ |-- 7. Agent decrypts card, uses credentials to complete real-world booking
+```
+
+### Security Properties
+
+| Property | Mechanism |
+|----------|-----------|
+| **Operator can't steal cards** | Credentials encrypted with agent's ECIES pubkey inside the enclave |
+| **Code integrity** | `GET /v1/attestation` returns `code_hash` (Docker image SHA) + signed by TEE key |
+| **Payment = card limit** | Receipt asserts `amount_usd_cents === card_spending_limit_cents` — provably verified |
+| **Fraud prevention** | World ID nullifier check (optional) + per-agent rate limits + Supabase audit log |
+| **Automatic cleanup** | Card auto-cancelled after 10 minutes via `setTimeout` |
+
+### Supported Chains
+
+| Chain | Token | Contract |
+|-------|-------|----------|
+| Arc Testnet (5042002) | EURC (6 decimals) | `config.arc.eurcContract` |
+| Hedera Testnet | USDC HTS (6 decimals) | Token `0.0.429274` |
+
+### TEE Endpoints
+
+| Endpoint | Purpose |
+|----------|---------|
+| `POST /v1/card-issue` | x402-gated one-time Stripe card issuance |
+| `GET /v1/attestation` | Code hash + TEE pubkey for trustless verification |
+| `POST /v1/verify-receipt` | Utility: verify a card issuance receipt on-demand |
+| `POST /facilitator/verify` | x402 payment verification for external merchants |
+| `POST /facilitator/settle` | x402 payment settlement for external merchants |
+| `POST /admin/ban` | Ban fraudulent agent pubkeys |
+
+---
+
 ## Payment Flows
 
 ### Agent Books a Hotel
@@ -287,6 +337,8 @@ cd web && npx playwright test
 | `orchestrator/` | Backend API + voice pipeline + SIWE auth | Python, FastAPI | 15 pass |
 | `web/` | Frontend dashboard + voice UI | Next.js 15, Reown AppKit, wagmi | E2E pass |
 | `agent/` | Claude Code persona + MCP config | CLAUDE.md, .mcp.json | -- |
+| `tee-server/` | TEE bridge: x402 → Stripe virtual card issuance | TypeScript, Bun, Stripe Issuing | -- |
+| `mcp-servers/tee-web-agent/` | Browser automation + crypto-to-card checkout via TEE | Python, Playwright, FastMCP | -- |
 
 ### MCP Tools Available to the Agent
 
@@ -307,6 +359,8 @@ cd web && npx playwright test
 | `verified_evaluate` | 0G Compute TEE-verified AI evaluation |
 | `maps_search_places` | Google Maps place search |
 | `get_directions` | Google Maps routing |
+| `request_card` | TEE bridge: pay x402 → receive encrypted Stripe virtual card credentials |
+| `get_attestation` | Verify TEE code integrity (code hash + pubkey) before trusting card issuance |
 
 ### x402 Mock Endpoints
 
@@ -409,10 +463,30 @@ ethglobal/
 |   +-- trip-memory/              # 0G Storage: save/load trip data + files
 |   +-- 0g-compute/              # 0G Compute: TEE-verified inference
 |   +-- x402-mock/               # Mock x402 APIs: hotel, toll, gas, restaurants, weather
+|   +-- tee-web-agent/           # TEE web agent MCP: browser automation + crypto card checkout
+|   |   +-- mcp_server.py        # FastMCP server — exposes pay() tool to Claude
+|   |   +-- web_agent.py         # Orchestrates browser task + card payment end-to-end
+|   |   +-- browser.py           # Playwright browser automation
+|   |   +-- x402_client.py       # x402 payment flow (request card from tee-server)
+|   |   +-- crypto_utils.py      # ECIES decrypt for TEE-encrypted card credentials
+|   |   +-- wallet_arc.py        # Arc chain signer (EURC payments)
+|   |   +-- wallet_hedera.py     # Hedera chain signer (USDC payments)
+|   |   +-- pay_toll.py          # Autonomous toll payment helper
 |
 +-- agent/
 |   +-- CLAUDE.md                 # Agent persona + behavior rules
 |   +-- .mcp.json                 # MCP server configuration (5 servers)
+|
++-- tee-server/                   # TEE card bridge (Express + Stripe Issuing)
+|   +-- src/
+|   |   +-- index.ts              # Express app, attestation + facilitator endpoints
+|   |   +-- routes/cardIssue.ts  # POST /v1/card-issue — x402 gated card issuance
+|   |   +-- x402/facilitator.ts  # Verify + settle x402 payments (Arc + Hedera)
+|   |   +-- crypto/signer.ts     # TEE signing key (enclave-derived)
+|   |   +-- crypto/encrypt.ts    # ECIES encryption for agent pubkeys
+|   |   +-- stripe/issuing.ts    # One-time virtual card creation + cancellation
+|   |   +-- fraud/               # World ID nullifier check + rate limiting
+|   |   +-- db/supabase.ts       # Audit log + card cancellation tracking
 |
 +-- docs/                         # Design docs, integration strategies
 +-- DEMO.md                       # Quick demo guide
